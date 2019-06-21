@@ -153,13 +153,16 @@ void cMap::draw(void)
             {
                 struct map_tile &tile = it->second;
                 string symbol;
+                string pre = (tile.wrapped)?"<":" ";
+                string post = (tile.wrapped)?">":" ";
                 switch (tile.position.booster)
                 {
-                    case BOOST_NONE: symbol = " # "; break;
-                    case BOOST_EXT_MANIP: symbol = " B "; break;
-                    case BOOST_FAST_WHEELS: symbol = " F "; break;
-                    case BOOST_DRILL: symbol = " L "; break;
-                    case BOOST_X: symbol = " X "; break;
+                    case BOOST_NONE: symbol         = pre+"#"+post; break;
+                    case BOOST_EXT_MANIP: symbol    = pre+"B"+post; break;
+                    case BOOST_FAST_WHEELS: symbol  = pre+"F"+post; break;
+                    case BOOST_DRILL: symbol        = pre+"L"+post; break;
+                    case BOOST_X: symbol            = pre+"X"+post; break;
+                    case BOOST_RESET: symbol        = pre+"R"+post; break;
                 default:
                     cout << "Unknown tile type: " << tile.position.booster << endl;
                     exit(-1);
@@ -172,3 +175,128 @@ void cMap::draw(void)
     }
     cout << endl;
 }
+
+void cMap::try_wrap(struct coords worker, vector<struct coords> manips)
+{
+    auto worker_pos_it = tiles.find(worker.tostr());
+    if (worker_pos_it == tiles.end())
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+    struct map_tile &worker_pos = worker_pos_it->second;
+    worker_pos.wrapped = true;
+//TODO: collect boosters
+    for(auto manip : manips)
+    {
+        auto manip_pos_it = tiles.find(manip.tostr());
+        if (manip_pos_it == tiles.end())
+        {
+            continue;
+        }
+        manip_pos_it->second.wrapped = true;
+//TODO: test for reachable
+    }
+}
+
+static int calc_dist(struct coords p1, struct coords p2)
+{
+    int x = p1.x - p2.x;
+    int y = p1.y - p2.y;
+    return x*x+y*y;
+}
+
+struct coords cMap::find_target(struct coords worker, vector<struct coords> manips)
+{
+    int min_dist = calc_dist(coords(0,0), map_size);
+    struct coords target(worker);
+    for(int y = 0; y < map_size.y; y++)
+    {
+        for(int x = 0; x < map_size.x; x++)
+        {
+            auto cur_tile = coords(x, y);
+            auto tile_it = tiles.find(cur_tile.tostr());
+            if (tile_it == tiles.end())
+                continue;
+            if(tile_it->second.wrapped == true)
+                continue;
+            int dist = calc_dist(worker, cur_tile);
+            if(min_dist > dist)
+            {
+                min_dist = dist;
+                target = cur_tile;
+            }
+        }
+    }
+
+    return target;
+}
+
+directions_e cMap::get_direction(struct coords worker, struct coords target)
+{
+    int x = target.x - worker.x;
+    int y = target.y - worker.y;
+
+    map <directions_e, bool> dir_variants;
+    dir_variants[DIR_RI] = true;
+    dir_variants[DIR_DN] = true;
+    dir_variants[DIR_LE] = true;
+    dir_variants[DIR_UP] = true;
+
+    if(x > 0) dir_variants[DIR_LE] = false;
+    if(x < 0) dir_variants[DIR_RI] = false;
+    if(y > 0) dir_variants[DIR_DN] = false;
+    if(y < 0) dir_variants[DIR_UP] = false;
+
+    if(dir_variants[DIR_RI])
+    {
+        auto tmp = worker;
+        tmp.x += 1;
+        if(tmp == target)
+            return DIR_RI;
+        auto tile_it = tiles.find(tmp.tostr());
+        if (tile_it == tiles.end())
+            dir_variants[DIR_RI] = false;
+    }
+    if(dir_variants[DIR_DN])
+    {
+        auto tmp = worker;
+        tmp.y -= 1;
+        if(tmp == target)
+            return DIR_DN;
+        auto tile_it = tiles.find(tmp.tostr());
+        if (tile_it == tiles.end())
+            dir_variants[DIR_DN] = false;
+    }
+    if(dir_variants[DIR_LE])
+    {
+        auto tmp = worker;
+        tmp.x -= 1;
+        if(tmp == target)
+            return DIR_LE;
+        auto tile_it = tiles.find(tmp.tostr());
+        if (tile_it == tiles.end())
+            dir_variants[DIR_LE] = false;
+    }
+    if(dir_variants[DIR_UP])
+    {
+        auto tmp = worker;
+        tmp.y += 1;
+        if(tmp == target)
+            return DIR_UP;
+        auto tile_it = tiles.find(tmp.tostr());
+        if (tile_it == tiles.end())
+            dir_variants[DIR_UP] = false;
+    }
+    for(auto dir : dir_variants)
+    {
+        if(dir.second)
+            return dir.first;
+    }
+    cout << "Can't find a way from " << worker.tostr() << " to " << target.tostr() << endl;
+    exit(-1);
+}
+
+
+
+

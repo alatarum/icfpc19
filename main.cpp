@@ -8,6 +8,8 @@
 
 #include "main.h"
 #include "cMap.h"
+#include "cWorker.h"
+#include "cStrategy.h"
 
 using namespace std;
 
@@ -81,7 +83,6 @@ vector<struct coords> parse_coords_boost(string str)
     std::string item;
     while (std::getline(ss, item, ';'))
     {
-        cout << "Step: " <<  item << " in " << str << endl;
         boosters_e booster = BOOST_NONE;
         switch(item[0])
         {
@@ -89,6 +90,7 @@ vector<struct coords> parse_coords_boost(string str)
             case 'F': booster = BOOST_FAST_WHEELS; break;
             case 'L': booster = BOOST_DRILL; break;
             case 'X': booster = BOOST_X; break;
+            case 'R': booster = BOOST_RESET; break;
             default:
                 cout << "parse_coords: can't parse booster: " <<  item << " in " << str << endl;
                 exit(-1);
@@ -133,12 +135,16 @@ int main(int argc, char *argv[])
     int opt;
     int verbose = 0;
     char *problem_file = NULL;
+    char *solution_file = NULL;
     modes_e mode = MODE_DEFAULT;
-    while ((opt = getopt(argc, argv, "hvi:p")) != -1)
+    while ((opt = getopt(argc, argv, "hvi:o:p")) != -1)
     {
         switch (opt) {
         case 'i':
             problem_file = optarg;
+            break;
+        case 'o':
+            solution_file = optarg;
             break;
         case 'p':
             mode = MODE_PARSE_ONLY;
@@ -213,10 +219,33 @@ int main(int argc, char *argv[])
     mine_map->place_boosters(boosters_coords);
     if(verbose)
         mine_map->draw();
-//
-//    ofstream solution;
-//    myfile.open (problem_file);
-//    myfile << "Writing this to a file.\n";
-//    myfile.close();
+
+    auto worker = new cWorker(init_location);
+    auto strategy = new cStrategy(mine_map, worker);
+    int steps = 0;
+    while(strategy->step())
+    {
+        steps++;
+
+        if(steps > 1000)
+        {
+            cout << "Can't solve this " << endl;
+            return -1;
+        }
+    }
+
+    string log = worker->dump_log();
+
+    cout << "Solution: " << log << endl;
+    ofstream solution_f(solution_file);
+    if (solution_f.is_open())
+    {
+        solution_f << log << endl;
+        solution_f.close();
+    } else {
+        cout << "Unable to open file" << endl;
+        return -1;
+    }
+
     return 0;
 }
