@@ -42,6 +42,8 @@
 		<Unit filename="cWorker.h" />
 		<Unit filename="main.cpp" />
 		<Unit filename="main.h" />
+		<Unit filename="run_solver.sh" />
+		<Unit filename="run_solver_pool.sh" />
 		<Extensions>
 			<code_completion />
 			<envvars />

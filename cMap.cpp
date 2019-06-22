@@ -2,6 +2,7 @@
 #include <iomanip>      // std::setw
 
 #include "cMap.h"
+#include "lemon/dijkstra.h"
 
 using namespace std;
 
@@ -12,7 +13,7 @@ struct vertical_line
 };
 
 cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>> obstacles_list) :
-    map_size(0, 0)
+    map_size(0, 0), graph(), graph_tiles(graph), costMap(graph, 1)
 {
 //1. determine map size and extract vertical lines for borders
     vector<struct vertical_line> lines;
@@ -77,7 +78,13 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
                 }
             }
             if(border_crosses % 2)
-                tiles[coords(x, y).tostr()].position = coords(x, y);
+            {
+                ListGraph::Node nd = graph.addNode();
+                string index = coords(x, y).tostr();
+                tiles[index].position = coords(x, y);
+                tiles[index].node_id = graph.id(nd);
+                graph_tiles[nd] = &tiles[index];
+            }
         }
     }
 
@@ -94,16 +101,36 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
 
             it = tiles.find(coords(x+1, y).tostr());
             if (it != tiles.end())
+            {
                 tile.links[DIR_RI] = &it->second;
+                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                costMap[graph.direct(edge, true)] = 1;
+                costMap[graph.direct(edge, false)] = 1;
+            }
             it = tiles.find(coords(x-1, y).tostr());
             if (it != tiles.end())
+            {
                 tile.links[DIR_LE] = &it->second;
+                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                costMap[graph.direct(edge, true)] = 1;
+                costMap[graph.direct(edge, false)] = 1;
+            }
             it = tiles.find(coords(x, y+1).tostr());
             if (it != tiles.end())
+            {
                 tile.links[DIR_UP] = &it->second;
+                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                costMap[graph.direct(edge, true)] = 1;
+                costMap[graph.direct(edge, false)] = 1;
+            }
             it = tiles.find(coords(x, y-1).tostr());
             if (it != tiles.end())
+            {
                 tile.links[DIR_DN] = &it->second;
+                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                costMap[graph.direct(edge, true)] = 1;
+                costMap[graph.direct(edge, false)] = 1;
+            }
 
 //            cout << "Tile " << tile.position.tostr_full() << " points to: ";
 //            if(tile.links[DIR_RI]) cout << tile.links[DIR_RI]->position.tostr_full() << " ";
@@ -234,67 +261,54 @@ struct coords cMap::find_target(struct coords worker, vector<struct coords> mani
 
 directions_e cMap::get_direction(struct coords worker, struct coords target)
 {
-    int x = target.x - worker.x;
-    int y = target.y - worker.y;
+    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
 
-    map <directions_e, bool> dir_variants;
-    dir_variants[DIR_RI] = true;
-    dir_variants[DIR_DN] = true;
-    dir_variants[DIR_LE] = true;
-    dir_variants[DIR_UP] = true;
+    auto worker_it = tiles.find(worker.tostr());
+    if (worker_it == tiles.end())
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+    auto target_it = tiles.find(target.tostr());
+    if (target_it == tiles.end())
+    {
+        cout << "Worker can't get here: " << target.tostr() << endl;
+        exit(-1);
+    }
 
-    if(x > 0) dir_variants[DIR_LE] = false;
-    if(x < 0) dir_variants[DIR_RI] = false;
-    if(y > 0) dir_variants[DIR_DN] = false;
-    if(y < 0) dir_variants[DIR_UP] = false;
+    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    ListGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
 
-    if(dir_variants[DIR_RI])
+    dijkstra.run(from, to);
+
+    vector<struct map_tile*> path;
+    for (lemon::ListGraph::Node v = to; v != from; v = dijkstra.predNode(v))
     {
-        auto tmp = worker;
-        tmp.x += 1;
-        if(tmp == target)
-            return DIR_RI;
-        auto tile_it = tiles.find(tmp.tostr());
-        if (tile_it == tiles.end())
-            dir_variants[DIR_RI] = false;
+        if (v != lemon::INVALID && dijkstra.reached(v)) //special LEMON node constant
+        {
+            path.push_back(graph_tiles[v]);
+        }
     }
-    if(dir_variants[DIR_DN])
+    struct coords next((*path.rbegin())->position);
+
+    int dx = next.x - worker.x;
+    int dy = next.y - worker.y;
+
+    directions_e res;
+    if( dx > 0 && dy == 0)
     {
-        auto tmp = worker;
-        tmp.y -= 1;
-        if(tmp == target)
-            return DIR_DN;
-        auto tile_it = tiles.find(tmp.tostr());
-        if (tile_it == tiles.end())
-            dir_variants[DIR_DN] = false;
+        res = DIR_RI;
+    } else if( dx == 0 && dy < 0) {
+        res = DIR_DN;
+    } else if( dx < 0 && dy == 0) {
+        res = DIR_LE;
+    } else if( dx == 0 && dy > 0) {
+        res = DIR_UP;
+    } else {
+        cout << "Can't find a way from " << worker.tostr() << " to " << target.tostr() << endl;
+        exit(-1);
     }
-    if(dir_variants[DIR_LE])
-    {
-        auto tmp = worker;
-        tmp.x -= 1;
-        if(tmp == target)
-            return DIR_LE;
-        auto tile_it = tiles.find(tmp.tostr());
-        if (tile_it == tiles.end())
-            dir_variants[DIR_LE] = false;
-    }
-    if(dir_variants[DIR_UP])
-    {
-        auto tmp = worker;
-        tmp.y += 1;
-        if(tmp == target)
-            return DIR_UP;
-        auto tile_it = tiles.find(tmp.tostr());
-        if (tile_it == tiles.end())
-            dir_variants[DIR_UP] = false;
-    }
-    for(auto dir : dir_variants)
-    {
-        if(dir.second)
-            return dir.first;
-    }
-    cout << "Can't find a way from " << worker.tostr() << " to " << target.tostr() << endl;
-    exit(-1);
+    return res;
 }
 
 

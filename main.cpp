@@ -13,7 +13,6 @@
 
 using namespace std;
 
-
 void usage(char *name)
 {
     printf("Solver for ICFPC 2019. See source code for usage information.\n\n");
@@ -176,8 +175,14 @@ int main(int argc, char *argv[])
     std::vector<std::string> problem = split(line, '#');
     vector<struct coords> map_border_coords = parse_coords(problem[PROB_MAP_BORDER]);
     vector<struct coords> init_location_tmp = parse_coords(problem[PROB_INIT_LOCATION]);
-    vector<vector<struct coords>> obstacles_list = parse_coords_obstacles(problem[PROB_OBSTACLES_LIST]);
-    vector<struct coords> boosters_coords = parse_coords_boost(problem[PROB_BOOSTERS_LIST]);
+    vector<vector<struct coords>> obstacles_list;
+    if(problem.size() > 2)
+        obstacles_list = parse_coords_obstacles(problem[PROB_OBSTACLES_LIST]);
+    vector<struct coords> boosters_coords;
+    if(problem.size() > 3)
+    {
+        boosters_coords = parse_coords_boost(problem[PROB_BOOSTERS_LIST]);
+    }
 
     if(init_location_tmp.size() != 1)
     {
@@ -232,6 +237,8 @@ int main(int argc, char *argv[])
             cout << "Can't solve this " << endl;
             return -1;
         }
+    if(verbose)
+        mine_map->draw();
     }
 
     string log = worker->dump_log();

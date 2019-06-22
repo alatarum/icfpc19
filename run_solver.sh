@@ -1,15 +1,21 @@
-#!/bin/sh -u
+#!/bin/bash -u
 
 usage()
 {
     echo "Usage: $(basename "$0") " \
-        "-i <dir_parth> "
+        "-i <dir_parth>     input files directory"
+        "-o <dir_parth>     output files directory"
+        "-t <n>             process only each N-th file"
+        "-n <n>             start from N-th file"
 }
 
 
 input_dir=
 output_dir=
-solver=bin/Debug/icfpc19
+solver=./icfpc19
+
+threads=1
+start_num=1
 
 while [ $# -gt 0 ];
 do
@@ -31,6 +37,24 @@ do
             exit 1
         fi
         output_dir=$1
+    ;;
+    -t)
+        shift
+        if [ ! $# -gt 0 ]; then
+            echo "$(basename "$0"): syntax error"
+            usage
+            exit 1
+        fi
+        threads=$1
+    ;;
+    -n)
+        shift
+        if [ ! $# -gt 0 ]; then
+            echo "$(basename "$0"): syntax error"
+            usage
+            exit 1
+        fi
+        start_num=$1
     ;;
     -h)
         echo "$(basename "$0"):"
@@ -59,14 +83,23 @@ if [ ! -d "$output_dir" ]; then
         exit
 fi
 
-for file in ${input_dir}/*.desc;
+declare -a prob_files=(${input_dir}/*.desc)
+
+# get length of an array
+arraylength=${#prob_files[@]}
+
+# use for loop to read all values and indexes
+for (( i=start_num; i<${arraylength}+1; i=i+threads));
 do
-    out_filename="$(basename "$file" .desc).sol"
-    echo "running for file ${file}"
-    $solver -i ${file} -o ${output_dir}/${out_filename}
+    in_file=${prob_files[$i-1]}
+    out_filename="$(basename "${in_file}" .desc).sol"
+    echo "running for file ${in_file} (" $i "/" ${arraylength} ")"
+    $solver -i ${in_file} -o ${output_dir}/${out_filename}
     if [ $? -ne 0 ]; then
-        echo "Failed on file ${file}!"
-#        exit
+        echo "Runner $start_num: Failed on file ${in_file}!"
+    else
+        echo "Runner $start_num: Ok"
     fi
-    echo "Ok"
 done
+
+echo "Runner $start_num: Done"

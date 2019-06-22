@@ -6,8 +6,10 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <lemon/list_graph.h>
 
 using namespace std;
+using namespace lemon;
 
 enum boosters_e {
     BOOST_NONE,
@@ -63,7 +65,7 @@ enum directions_e {
 };
 
 struct map_tile {
-    map_tile(): position(0, 0), wrapped(false) {
+    map_tile(): position(0, 0), wrapped(false), node_id(-1) {
         links[DIR_RI] = nullptr;
         links[DIR_DN] = nullptr;
         links[DIR_LE] = nullptr;
@@ -73,6 +75,7 @@ struct map_tile {
     struct coords position;
     bool wrapped;
     map<directions_e, struct map_tile *> links;
+    int node_id;
 //    struct map_tile *teleport;
 };
 
@@ -89,6 +92,10 @@ public:
 
 private:
     map<string, struct map_tile> tiles;
+    ListGraph graph;
+    ListGraph::NodeMap<struct map_tile *> graph_tiles;
+    ListGraph::ArcMap<int> costMap;
+
     struct coords map_size;
 };
 
