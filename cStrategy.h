@@ -14,6 +14,7 @@ public:
 private:
     cMap *mine_map;
     cWorker *worker;
+    struct coords cur_target;
 };
 
 #endif // CSTRATEGY_H

@@ -136,7 +136,8 @@ int main(int argc, char *argv[])
     char *problem_file = NULL;
     char *solution_file = NULL;
     modes_e mode = MODE_DEFAULT;
-    while ((opt = getopt(argc, argv, "hvi:o:p")) != -1)
+    int max_steps = 1000;
+    while ((opt = getopt(argc, argv, "hvi:o:n:p")) != -1)
     {
         switch (opt) {
         case 'i':
@@ -144,6 +145,9 @@ int main(int argc, char *argv[])
             break;
         case 'o':
             solution_file = optarg;
+            break;
+        case 'n':
+            max_steps = atoi(optarg);
             break;
         case 'p':
             mode = MODE_PARSE_ONLY;
@@ -232,9 +236,9 @@ int main(int argc, char *argv[])
     {
         steps++;
 
-        if(steps > 1000)
+        if(steps > max_steps)
         {
-            cout << "Can't solve this " << endl;
+            cout << "Can't solve this in " << max_steps << " steps." << endl;
             return -1;
         }
     if(verbose)
@@ -244,6 +248,7 @@ int main(int argc, char *argv[])
     string log = worker->dump_log();
 
     cout << "Solution: " << log << endl;
+    cout << "Number of steps: " << steps << endl;
     ofstream solution_f(solution_file);
     if (solution_f.is_open())
     {

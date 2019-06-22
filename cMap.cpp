@@ -4,6 +4,11 @@
 #include "cMap.h"
 #include "lemon/dijkstra.h"
 
+static const int WEIGHT_DEFAULT = 1;
+static const int WEIGHT_NOT_STRAIGHT_DIR = 10;
+static const int WEIGHT_NOT_UNWRAPPED_DST = 1;
+static const int WEIGHT_NOT_UNWRAPPED_MANIP = 8;
+
 using namespace std;
 
 struct vertical_line
@@ -102,42 +107,24 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
             it = tiles.find(coords(x+1, y).tostr());
             if (it != tiles.end())
             {
-                tile.links[DIR_RI] = &it->second;
-                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                costMap[graph.direct(edge, true)] = 1;
-                costMap[graph.direct(edge, false)] = 1;
+                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
             }
             it = tiles.find(coords(x-1, y).tostr());
             if (it != tiles.end())
             {
-                tile.links[DIR_LE] = &it->second;
-                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                costMap[graph.direct(edge, true)] = 1;
-                costMap[graph.direct(edge, false)] = 1;
+                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
             }
             it = tiles.find(coords(x, y+1).tostr());
             if (it != tiles.end())
             {
-                tile.links[DIR_UP] = &it->second;
-                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                costMap[graph.direct(edge, true)] = 1;
-                costMap[graph.direct(edge, false)] = 1;
+                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
             }
             it = tiles.find(coords(x, y-1).tostr());
             if (it != tiles.end())
             {
-                tile.links[DIR_DN] = &it->second;
-                auto edge = graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                costMap[graph.direct(edge, true)] = 1;
-                costMap[graph.direct(edge, false)] = 1;
+                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
             }
 
-//            cout << "Tile " << tile.position.tostr_full() << " points to: ";
-//            if(tile.links[DIR_RI]) cout << tile.links[DIR_RI]->position.tostr_full() << " ";
-//            if(tile.links[DIR_LE]) cout << tile.links[DIR_LE]->position.tostr_full() << " ";
-//            if(tile.links[DIR_UP]) cout << tile.links[DIR_UP]->position.tostr_full() << " ";
-//            if(tile.links[DIR_DN]) cout << tile.links[DIR_DN]->position.tostr_full() << " ";
-//            cout << endl;
         }
     }
 }
@@ -145,6 +132,41 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
 cMap::~cMap()
 {
 }
+
+void cMap::reset_edges_cost()
+{
+    for (ListGraph::ArcIt arc(graph); arc != INVALID; ++arc)
+    {
+        costMap[arc] = WEIGHT_DEFAULT;
+    }
+}
+
+void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
+{
+    for (ListGraph::ArcIt arc(graph); arc != INVALID; ++arc)
+    {
+        auto src = graph_tiles[graph.source(arc)];
+        auto dst = graph_tiles[graph.target(arc)];
+        bool vertical_edge = src->position.x == dst->position.x;
+        costMap[arc] = WEIGHT_DEFAULT;
+        if(vertical_edge != is_vertical)
+        {
+            costMap[arc] += WEIGHT_NOT_STRAIGHT_DIR;
+        }
+        if(dst->wrapped == true)
+        {
+            costMap[arc] += WEIGHT_NOT_UNWRAPPED_DST;
+        }
+        for(auto manip_coord: manips)
+        {
+            if(!test_wrappable(dst->position, manip_coord, false))
+            {
+                costMap[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
+            }
+        }
+    }
+}
+
 
 void cMap::place_boosters(vector<struct coords> boosters_coords)
 {
@@ -180,7 +202,7 @@ void cMap::draw(void)
             {
                 struct map_tile &tile = it->second;
                 string symbol;
-                string pre = (tile.wrapped)?"<":" ";
+                string pre  = (tile.wrapped)?"<":" ";
                 string post = (tile.wrapped)?">":" ";
                 switch (tile.position.booster)
                 {
@@ -203,7 +225,47 @@ void cMap::draw(void)
     cout << endl;
 }
 
-void cMap::try_wrap(struct coords worker, vector<struct coords> manips)
+bool cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wrap)
+{
+    auto worker_pos_it = tiles.find(worker.tostr());
+    if (worker_pos_it == tiles.end())
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+
+    struct coords manip = worker + manip_rel;
+
+    auto manip_pos_it = tiles.find(manip.tostr());
+    if (manip_pos_it == tiles.end())
+    {
+        return false;
+    }
+    if (manip_pos_it->second.wrapped)
+    {
+        return false;
+    }
+//TODO: test for reachable
+    if (wrap)
+        manip_pos_it->second.wrapped = true;
+    return true;
+}
+
+bool cMap::is_unwrapped(struct coords target)
+{
+    auto pos_it = tiles.find(target.tostr());
+    if (pos_it == tiles.end())
+    {
+        return false;
+    }
+    if (pos_it->second.wrapped)
+    {
+        return false;
+    }
+    return true;
+}
+
+void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
 {
     auto worker_pos_it = tiles.find(worker.tostr());
     if (worker_pos_it == tiles.end())
@@ -214,54 +276,81 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips)
     struct map_tile &worker_pos = worker_pos_it->second;
     worker_pos.wrapped = true;
 //TODO: collect boosters
-    for(auto manip : manips)
+    for(auto manip_rel : manips_rel)
     {
-        auto manip_pos_it = tiles.find(manip.tostr());
-        if (manip_pos_it == tiles.end())
-        {
+        test_wrappable(worker, manip_rel, true);
+    }
+}
+
+struct coords cMap::find_target(struct coords worker, rect_t region)
+{
+//looking for far point in region
+    struct coords min_target(worker);
+    struct coords max_target(worker);
+    int min_dist = -1;
+    int max_dist = 0;
+
+    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+
+    auto worker_it = tiles.find(worker.tostr());
+    if (worker_it == tiles.end())
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    dijkstra.run(from);
+
+    for (ListGraph::NodeIt n(graph); n != INVALID; ++n)
+    {
+    //print out the path with reverse iterator
+        if((graph_tiles[n]->wrapped == true) || !region.in_rect(graph_tiles[n]->position))
             continue;
-        }
-        manip_pos_it->second.wrapped = true;
-//TODO: test for reachable
-    }
-}
-
-static int calc_dist(struct coords p1, struct coords p2)
-{
-    int x = p1.x - p2.x;
-    int y = p1.y - p2.y;
-    return x*x+y*y;
-}
-
-struct coords cMap::find_target(struct coords worker, vector<struct coords> manips)
-{
-    int min_dist = calc_dist(coords(0,0), map_size);
-    struct coords target(worker);
-    for(int y = 0; y < map_size.y; y++)
-    {
-        for(int x = 0; x < map_size.x; x++)
+        int dist = dijkstra.dist(n);
+        if(min_dist < 0 || dist < min_dist)
         {
-            auto cur_tile = coords(x, y);
-            auto tile_it = tiles.find(cur_tile.tostr());
-            if (tile_it == tiles.end())
-                continue;
-            if(tile_it->second.wrapped == true)
-                continue;
-            int dist = calc_dist(worker, cur_tile);
-            if(min_dist > dist)
-            {
-                min_dist = dist;
-                target = cur_tile;
-            }
+            min_dist = dist;
+            min_target = graph_tiles[n]->position;
+        }
+        if(max_dist < dist && dist < 9)
+        {
+            max_dist = dist;
+            max_target = graph_tiles[n]->position;
         }
     }
+    struct coords target(max_dist>0?max_target:min_target);
 
     return target;
+}
+
+int cMap::estimate_route(struct coords worker, struct coords target)
+{
+    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+
+    auto worker_it = tiles.find(worker.tostr());
+    if (worker_it == tiles.end())
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+    auto target_it = tiles.find(target.tostr());
+    if (target_it == tiles.end())
+    {
+        cout << "Worker can't get here: " << target.tostr() << endl;
+        exit(-1);
+    }
+
+    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    ListGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
+
+    dijkstra.run(from, to);
+    return dijkstra.dist(to);
 }
 
 directions_e cMap::get_direction(struct coords worker, struct coords target)
 {
     Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+    struct coords next(worker);
 
     auto worker_it = tiles.find(worker.tostr());
     if (worker_it == tiles.end())
@@ -286,10 +375,24 @@ directions_e cMap::get_direction(struct coords worker, struct coords target)
     {
         if (v != lemon::INVALID && dijkstra.reached(v)) //special LEMON node constant
         {
-            path.push_back(graph_tiles[v]);
+            next = graph_tiles[v]->position;
         }
     }
-    struct coords next((*path.rbegin())->position);
+
+//    int cost = dijkstra.dist(to);
+//    //print out the path with reverse iterator
+//    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: ";
+//    for (auto p = path.rbegin(); p != path.rend(); ++p)
+//        std::cout << (*p)->position.tostr() << " ";
+//    std::cout << std::endl << "Total cost for the shortest path is: "<< cost << std::endl;
+//
+//    std::cout << "Arcs from node " << worker.tostr() << std::endl;
+//    for (ListGraph::OutArcIt a(graph, from); a != INVALID; ++a)
+//    {
+//        std::cout << "   Arc " << graph.id(a) << " to node " << graph_tiles[graph.target(a)]->position.tostr() << " cost " << costMap[a] << std::endl;
+//
+//    }
+
 
     int dx = next.x - worker.x;
     int dy = next.y - worker.y;

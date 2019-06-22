@@ -50,33 +50,64 @@ struct coords
     bool operator == (const struct coords &other) const {
         return (x == other.x) && (y == other.y);
     }
+    struct coords operator+(struct coords const & c1) {
+        return coords(x+c1.x, y+c1.y);
+    }
 
     int x;
     int y;
     boosters_e booster;
 };
 
+struct rect_t
+{
+    rect_t(struct coords _p1, struct coords _p2): p1(_p1), p2(_p2) {}
+    struct coords p1;
+    struct coords p2;
+    struct coords base_point()
+    {
+        return coords((p1.x<p2.x)?p1.x:p2.x, (p1.y<p2.y)?p1.y:p2.y);
+    }
+    struct coords size()
+    {
+        int w = p1.x - p2.x;
+        int h = p1.y - p2.y;
+        return coords(w>0?w:-w, h>0?h:-h);
+    }
+    bool in_rect(struct coords target)
+    {
+        auto bp = base_point();
+        auto sz = size();
+        return  (target.x >= bp.x && target.x < bp.x+sz.x) &&
+                (target.y >= bp.y && target.y < bp.y+sz.y);
+    }
+};
+
 enum directions_e {
     DIR_RI = 0,
-    DIR_DN = 1,
+    DIR_UP = 1,
     DIR_LE = 2,
-    DIR_UP = 3,
+    DIR_DN = 3,
     DIR_COUNT
 };
 
 struct map_tile {
     map_tile(): position(0, 0), wrapped(false), node_id(-1) {
-        links[DIR_RI] = nullptr;
-        links[DIR_DN] = nullptr;
-        links[DIR_LE] = nullptr;
-        links[DIR_UP] = nullptr;
     }
 
     struct coords position;
     bool wrapped;
-    map<directions_e, struct map_tile *> links;
     int node_id;
-//    struct map_tile *teleport;
+};
+
+class cRegion
+{
+public:
+
+private:
+    ListGraph graph;
+    ListGraph::NodeMap<struct map_tile *> graph_tiles;
+    ListGraph::ArcMap<int> costMap;
 };
 
 class cMap
@@ -86,17 +117,27 @@ public:
     virtual ~cMap();
     void place_boosters(vector<struct coords> boosters_coords);
     void draw(void);
-    void try_wrap(struct coords worker, vector<struct coords> manips);
-    struct coords find_target(struct coords worker, vector<struct coords> manips);
+    void try_wrap(struct coords worker, vector<struct coords> manips_rel);
+    struct coords find_target(struct coords worker, rect_t region);
+    int estimate_route(struct coords worker, struct coords target);
     directions_e get_direction(struct coords worker, struct coords target);
+    void reset_edges_cost();
+    void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel);
+    bool is_unwrapped(struct coords target);
+
+    struct coords get_size() {return map_size;}
 
 private:
+    struct coords map_size;
     map<string, struct map_tile> tiles;
+    vector<class cRegion> regions;
+
+
     ListGraph graph;
     ListGraph::NodeMap<struct map_tile *> graph_tiles;
     ListGraph::ArcMap<int> costMap;
 
-    struct coords map_size;
+    bool test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
 };
 
 #endif // CMAP_H
