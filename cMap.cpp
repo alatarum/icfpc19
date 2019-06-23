@@ -5,6 +5,7 @@
 #include "lemon/dijkstra.h"
 
 static const int WEIGHT_DEFAULT = 1;
+static const int WEIGHT_NOT_LONE_TILE = 25;
 static const int WEIGHT_NOT_STRAIGHT_DIR = 10;
 static const int WEIGHT_NOT_UNWRAPPED_DST = 1;
 static const int WEIGHT_NOT_UNWRAPPED_MANIP = 8;
@@ -93,7 +94,7 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
         }
     }
 
-//4. Create graph
+//4. Create graph and scan regions
     for(int x = 0; x < map_size.x; x++)
     {
         for(int y = 0; y < map_size.y; y++)
@@ -103,28 +104,103 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
             if (it == tiles.end())
                 continue;
             struct map_tile &tile = it->second;
+            int neighbors = 0;
 
             it = tiles.find(coords(x+1, y).tostr());
             if (it != tiles.end())
             {
                 graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                neighbors++;
             }
             it = tiles.find(coords(x-1, y).tostr());
             if (it != tiles.end())
             {
                 graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                neighbors++;
             }
             it = tiles.find(coords(x, y+1).tostr());
             if (it != tiles.end())
             {
                 graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                neighbors++;
             }
             it = tiles.find(coords(x, y-1).tostr());
             if (it != tiles.end())
             {
                 graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
+                neighbors++;
             }
+            if(neighbors >= 3 && in_region(coords(x, y)) == nullptr)
+            {
+                cRegion *region = nullptr;
+                if((region = in_region(coords(x+1, y))) ||
+                   (region = in_region(coords(x, y+1))) ||
+                   (region = in_region(coords(x-1, y))) ||
+                   (region = in_region(coords(x, y-1))))
+                {
+                   region->add(coords(x, y));
+                } else {
+                    class cRegion new_region(coords(x, y));
+                    new_region.set_id(regions.size());
+                    regions.push_back(new_region);
+                }
+            }
+        }
+    }
+}
 
+void cRegion::add(struct coords target)
+{
+    if(in_region(target))
+        return;
+    rect_t new_rect(rect.base_point(), rect.base_point()+rect.size());
+    if(target.x < new_rect.p1.x)
+        new_rect.p1.x = target.x;
+    if(target.x+1 > new_rect.p2.x)
+        new_rect.p2.x = target.x+1;
+    if(target.y < new_rect.p1.y)
+        new_rect.p1.y = target.y;
+    if(target.y+1 > new_rect.p2.y)
+        new_rect.p2.y = target.y+1;
+    rect = new_rect;
+}
+
+class cRegion * cMap::in_region(struct coords target)
+{
+    for(auto &region: regions)
+    {
+        if(region.in_region(target))
+            return &region;
+    }
+
+    return nullptr;
+}
+
+class cRegion * cMap::get_region(int reg_id)
+{
+    if(reg_id < 0)
+        return nullptr;
+    for(auto &region: regions)
+    {
+        if(region.get_id() == reg_id)
+            return &region;
+    }
+
+    return nullptr;
+}
+
+void cMap::delete_region(int reg_id)
+{
+    if(reg_id < 0)
+        return;
+cout << "RM region: " << reg_id << endl;
+
+    for (auto region = regions.begin(); region != regions.end(); ++region)
+    {
+        if(region->get_id() == reg_id)
+        {
+            regions.erase(region);
+            return;
         }
     }
 }
@@ -163,6 +239,25 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
             {
                 costMap[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
             }
+        }
+
+        int neighbors = 0;
+        map<string, struct map_tile>::iterator it;
+        it = tiles.find(coords(dst->position.x+1, dst->position.y).tostr());
+        if (it != tiles.end() && !it->second.wrapped)
+            neighbors++;
+        it = tiles.find(coords(dst->position.x-1, dst->position.y).tostr());
+        if (it != tiles.end() && !it->second.wrapped)
+            neighbors++;
+        it = tiles.find(coords(dst->position.x, dst->position.y+1).tostr());
+        if (it != tiles.end() && !it->second.wrapped)
+            neighbors++;
+        it = tiles.find(coords(dst->position.x, dst->position.y-1).tostr());
+        if (it != tiles.end() && !it->second.wrapped)
+            neighbors++;
+        if(neighbors > 1 || dst->wrapped)
+        {
+            costMap[arc] += WEIGHT_NOT_LONE_TILE;
         }
     }
 }
@@ -204,6 +299,12 @@ void cMap::draw(void)
                 string symbol;
                 string pre  = (tile.wrapped)?"<":" ";
                 string post = (tile.wrapped)?">":" ";
+
+                auto region = in_region(coords(x, y));
+                if(region != nullptr)
+                {
+                    pre = std::to_string(region->get_id());
+                }
                 switch (tile.position.booster)
                 {
                     case BOOST_NONE: symbol         = pre+"#"+post; break;
@@ -282,7 +383,7 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
     }
 }
 
-struct coords cMap::find_target(struct coords worker, rect_t region)
+struct coords cMap::find_target(struct coords worker, int region_id)
 {
 //looking for far point in region
     struct coords min_target(worker);
@@ -303,22 +404,34 @@ struct coords cMap::find_target(struct coords worker, rect_t region)
 
     for (ListGraph::NodeIt n(graph); n != INVALID; ++n)
     {
-    //print out the path with reverse iterator
-        if((graph_tiles[n]->wrapped == true) || !region.in_rect(graph_tiles[n]->position))
+        if(graph_tiles[n]->wrapped == true)
             continue;
+        if(region_id >= 0)
+        {
+            if(!get_region(region_id)->in_region(graph_tiles[n]->position))
+                continue;
+        }
         int dist = dijkstra.dist(n);
         if(min_dist < 0 || dist < min_dist)
         {
             min_dist = dist;
             min_target = graph_tiles[n]->position;
         }
-        if(max_dist < dist && dist < 9)
+
+        if(region_id >= 0)
         {
-            max_dist = dist;
-            max_target = graph_tiles[n]->position;
+            struct coords tmp_sz(rect_t(worker, graph_tiles[n]->position).size());
+            if(max_dist < dist && dist < 8 && ((tmp_sz.x<2) || (tmp_sz.y<2)))
+            {
+                max_dist = dist;
+                max_target = graph_tiles[n]->position;
+            }
         }
+
     }
-    struct coords target(max_dist>0?max_target:min_target);
+    struct coords target((max_dist>0)?max_target:min_target);
+    int tgt_dist = (max_dist>0)?max_dist:min_dist;
+    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
 
     return target;
 }
@@ -413,7 +526,5 @@ directions_e cMap::get_direction(struct coords worker, struct coords target)
     }
     return res;
 }
-
-
 
 

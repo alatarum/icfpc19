@@ -103,11 +103,18 @@ struct map_tile {
 class cRegion
 {
 public:
-
+    cRegion(struct coords target): rect(coords(target.x-1,target.y-1), coords(target.x+2,target.y+2)) {}
+    bool in_region(struct coords target) { return rect.in_rect(target); }
+    void add(struct coords target);
+    rect_t get_rect() {return rect;}
+    void set_id(int _id) {id=_id;}
+    int get_id() {return id;}
 private:
-    ListGraph graph;
-    ListGraph::NodeMap<struct map_tile *> graph_tiles;
-    ListGraph::ArcMap<int> costMap;
+    int id;
+    rect_t rect;
+//    ListGraph graph;
+//    ListGraph::NodeMap<struct map_tile *> graph_tiles;
+//    ListGraph::ArcMap<int> costMap;
 };
 
 class cMap
@@ -118,7 +125,7 @@ public:
     void place_boosters(vector<struct coords> boosters_coords);
     void draw(void);
     void try_wrap(struct coords worker, vector<struct coords> manips_rel);
-    struct coords find_target(struct coords worker, rect_t region);
+    struct coords find_target(struct coords worker, int region_id);
     int estimate_route(struct coords worker, struct coords target);
     directions_e get_direction(struct coords worker, struct coords target);
     void reset_edges_cost();
@@ -126,7 +133,9 @@ public:
     bool is_unwrapped(struct coords target);
 
     struct coords get_size() {return map_size;}
-
+    class cRegion * in_region(struct coords target);
+    class cRegion * get_region(int reg_id);
+    void delete_region(int reg_id);
 private:
     struct coords map_size;
     map<string, struct map_tile> tiles;

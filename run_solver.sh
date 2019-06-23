@@ -98,7 +98,7 @@ do
     if [ $? -ne 0 ]; then
         echo "Runner $start_num: Failed on file ${in_file}!"
     else
-        echo "Runner $start_num: Ok"
+        echo "Runner $start_num: Ok for file ${in_file}"
     fi
 done
 
