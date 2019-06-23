@@ -7,6 +7,7 @@
 #include <map>
 #include <vector>
 #include <lemon/smart_graph.h>
+#include <lemon/adaptors.h>
 
 using namespace std;
 using namespace lemon;
@@ -32,6 +33,7 @@ const string booster_name[] = {
 
 struct coords
 {
+    coords(): x(0), y(0), booster(BOOST_NONE) {}
     coords(int _x, int _y): x(_x), y(_y), booster(BOOST_NONE) {}
     coords(int _x, int _y, boosters_e _b): x(_x), y(_y), booster(_b) {}
     string tostr() {
@@ -101,11 +103,12 @@ enum wrappable_e {
 };
 
 struct map_tile {
-    map_tile(): position(0, 0), wrapped(false), node_id(-1) {
-    }
-
+    map_tile(): position(0, 0), wrapped(false), drilled(false),
+                                booster(BOOST_NONE),node_id(-1) {}
     struct coords position;
     bool wrapped;
+    bool drilled;
+    boosters_e booster;
     int node_id;
 };
 
@@ -145,15 +148,21 @@ public:
     void delete_region(int reg_id);
 private:
     struct coords map_size;
-    map<string, struct map_tile> tiles;
+    vector<vector<struct map_tile> > tiles;
     vector<class cRegion> regions;
 
 
     SmartGraph graph;
+    SubGraph<SmartGraph> dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> costMap;
+    SmartGraph::NodeMap<bool> graph_filter_node;
+    SmartGraph::EdgeMap<bool> graph_filter_edge;
     SmartGraph::NodeMap<struct map_tile *> graph_tiles;
-    SmartGraph::ArcMap<int> costMap;
+
 
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
+    bool create_edge(coords node, coords to);
+    map_tile& tile(struct coords loc) {return tiles[loc.x][loc.y];}
 };
 
 #endif // CMAP_H

@@ -241,8 +241,8 @@ int main(int argc, char *argv[])
             cout << "Can't solve this in " << max_steps << " steps." << endl;
             return -1;
         }
-    if(verbose)
-        mine_map->draw();
+//    if(verbose)
+//        mine_map->draw();
     }
 
     string log = worker->dump_log();

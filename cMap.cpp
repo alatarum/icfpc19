@@ -20,7 +20,9 @@ struct vertical_line
 };
 
 cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>> obstacles_list) :
-    map_size(0, 0), graph(), graph_tiles(graph), costMap(graph, 1)
+    map_size(0, 0), graph(), graph_tiles(graph),
+    graph_filter_node(graph, false), graph_filter_edge(graph, true),
+    dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1)
 {
 //1. determine map size and extract vertical lines for borders
     vector<struct vertical_line> lines;
@@ -71,6 +73,9 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
     }
 
 //3. Create map
+    tiles = std::vector<std::vector<struct map_tile> > (
+        map_size.x, std::vector<struct map_tile>(map_size.y));
+
     for(int y = 0; y < map_size.y; y++)
     {
         int border_crosses = 0;
@@ -84,14 +89,15 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
                     break;
                 }
             }
+            SmartGraph::Node nd = graph.addNode();
+            tiles[x][y].node_id = graph.id(nd);
+            tiles[x][y].position = coords(x, y);
             if(border_crosses % 2)
             {
-                SmartGraph::Node nd = graph.addNode();
-                string index = coords(x, y).tostr();
-                tiles[index].position = coords(x, y);
-                tiles[index].node_id = graph.id(nd);
-                graph_tiles[nd] = &tiles[index];
+                tiles[x][y].drilled = true;
             }
+            graph_tiles[nd] = &(tiles[x][y]);
+            graph_filter_node[nd] = tiles[x][y].drilled;
         }
     }
 
@@ -100,38 +106,25 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
     {
         for(int y = 0; y < map_size.y; y++)
         {
-            map<string, struct map_tile>::iterator it;
-            it = tiles.find(coords(x, y).tostr());
-            if (it == tiles.end())
-                continue;
-            struct map_tile &tile = it->second;
             int neighbors = 0;
+            if(create_edge(coords(x, y), coords(x+1, y)))
+            {
+                neighbors++;
+            }
+            if(create_edge(coords(x, y), coords(x, y+1)))
+            {
+                neighbors++;
+            }
+            if(create_edge(coords(x, y), coords(x-1, y)))
+            {
+                neighbors++;
+            }
+            if(create_edge(coords(x, y), coords(x, y-1)))
+            {
+                neighbors++;
+            }
 
-            it = tiles.find(coords(x+1, y).tostr());
-            if (it != tiles.end())
-            {
-                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                neighbors++;
-            }
-            it = tiles.find(coords(x-1, y).tostr());
-            if (it != tiles.end())
-            {
-                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                neighbors++;
-            }
-            it = tiles.find(coords(x, y+1).tostr());
-            if (it != tiles.end())
-            {
-                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                neighbors++;
-            }
-            it = tiles.find(coords(x, y-1).tostr());
-            if (it != tiles.end())
-            {
-                graph.addEdge(graph.nodeFromId(tile.node_id), graph.nodeFromId(it->second.node_id));
-                neighbors++;
-            }
-            if(neighbors >= 3 && in_region(coords(x, y)) == nullptr)
+            if((neighbors >= 3) && (in_region(coords(x, y)) == nullptr))
             {
                 cRegion *region = nullptr;
                 if((region = in_region(coords(x+1, y))) ||
@@ -209,6 +202,164 @@ cMap::~cMap()
 {
 }
 
+void cMap::place_boosters(vector<struct coords> boosters_coords)
+{
+    for(auto booster_coords : boosters_coords)
+    {
+        tile(booster_coords).booster = booster_coords.booster;
+    }
+}
+
+void cMap::draw(void)
+{
+    struct map_tile cur_tile;
+    cout << "      " << "   ";
+    for(int x = 0; x < map_size.x; x++)
+    {
+        cout <<  setw(3) << x;
+    }
+    cout << endl;
+    for(int y = map_size.y-1; y >= 0; y--)
+    {
+        cout << setw(6) << y << "   ";
+        for(int x = 0; x < map_size.x; x++)
+        {
+            if (tiles[x][y].drilled)
+            {
+                struct map_tile &tile = tiles[x][y];
+                string symbol;
+                string pre  = (tile.wrapped)?"<":" ";
+                string post = (tile.wrapped)?">":" ";
+
+                auto region = in_region(coords(x, y));
+                if(region != nullptr)
+                {
+                    pre = std::to_string(region->get_id());
+                }
+                switch (tile.booster)
+                {
+                    case BOOST_NONE: symbol         = pre+"#"+post; break;
+                    case BOOST_EXT_MANIP: symbol    = pre+"B"+post; break;
+                    case BOOST_FAST_WHEELS: symbol  = pre+"F"+post; break;
+                    case BOOST_DRILL: symbol        = pre+"L"+post; break;
+                    case BOOST_X: symbol            = pre+"X"+post; break;
+                    case BOOST_RESET: symbol        = pre+"R"+post; break;
+                default:
+                    cout << "Unknown tile type: " << tile.booster << endl;
+                    exit(-1);
+                }
+                cout << symbol;
+            } else
+                cout << "   ";
+        }
+        cout << endl;
+    }
+    cout << endl;
+}
+
+wrappable_e cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wrap)
+{
+    if((!rect_t(coords(0,0), coords(map_size)).in_rect(worker)) || (!tile(worker).drilled))
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+
+    struct coords manip = worker + manip_rel;
+    if (!rect_t(coords(0,0), coords(map_size)).in_rect(manip))
+    {
+        return WRP_WALL;
+    }
+    auto &manip_tile = tile(manip);
+    if (!manip_tile.drilled)
+    {
+        return WRP_WALL;
+    }
+    if (manip_tile.wrapped)
+    {
+        return WRP_WRAPPED;
+    }
+//FIXME: Cheating: test for reachable
+    if((manip_rel.x > 1) || (manip_rel.x < -1) || (manip_rel.y > 1) || (manip_rel.y < -1))
+    {
+        //long arms
+        if (!tiles[worker.x + manip_rel.x/2][worker.y + manip_rel.y/2].drilled)
+        {
+            return WRP_CAN_NOT_WRAP;
+        }
+    }
+    if (wrap)
+    {
+        manip_tile.wrapped = true;
+        return WRP_WRAPRED_OK;
+    }
+    return WRP_CAN_WRAP;
+}
+
+bool cMap::is_unwrapped(struct coords target)
+{
+    if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
+    {
+        return false;
+    }
+    auto &target_tile = tile(target);
+    if (!target_tile.drilled)
+    {
+        return false;
+    }
+    if (target_tile.wrapped)
+    {
+        return false;
+    }
+    return true;
+}
+
+boosters_e cMap::pick_booster(struct coords target)
+{
+    auto &target_tile = tile(target);
+    if (!target_tile.drilled)
+    {
+        return BOOST_NONE;
+    }
+    boosters_e booster = target_tile.booster;
+    target_tile.booster = BOOST_NONE;
+    return booster;
+}
+
+void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
+{
+    auto &worker_tile = tile(worker);
+    if (!worker_tile.drilled)
+    {
+        cout << "Worker can't be here: " << worker.tostr() << endl;
+        exit(-1);
+    }
+    worker_tile.wrapped = true;
+    for(auto manip_rel : manips_rel)
+    {
+        test_wrappable(worker, manip_rel, true);
+    }
+}
+
+
+bool cMap::create_edge(coords node, coords to)
+{
+    if(to.x < 0 || to.y < 0 || to.x >= map_size.x || to.y >= map_size.y)
+        return false;
+    SmartGraph::Node from = graph.nodeFromId(tiles[node.x][node.y].node_id);
+    SmartGraph::Node next = graph.nodeFromId(tiles[to.x][to.y].node_id);
+
+    bool result = (tiles[to.x][to.y].drilled && tiles[node.x][node.y].drilled);
+
+    for(SmartGraph::IncEdgeIt edge(graph, from); edge != INVALID; ++ edge)
+    {
+        SmartGraph::Node opp_node = graph.oppositeNode(from, edge);
+        if(graph.id(opp_node) == graph.id(next)) return result;
+    }
+    graph_filter_edge[graph.addEdge(from, next)] = true;
+    return result;
+}
+
 void cMap::reset_edges_cost()
 {
     for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
@@ -219,7 +370,7 @@ void cMap::reset_edges_cost()
 
 void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
 {
-    for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
+    for (SubGraph<SmartGraph>::ArcIt arc(dgraph); arc != INVALID; ++arc)
     {
         auto src = graph_tiles[graph.source(arc)];
         auto dst = graph_tiles[graph.target(arc)];
@@ -249,168 +400,24 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
         }
 
         int neighbors = 0;
-        map<string, struct map_tile>::iterator it;
-        it = tiles.find(coords(dst->position.x+1, dst->position.y).tostr());
-        if (it != tiles.end() && !it->second.wrapped)
+        coords neighbor_pos;
+
+        neighbor_pos = coords(dst->position.x+1, dst->position.y);
+        if (rect_t(coords(0,0), coords(map_size)).in_rect(neighbor_pos) && tile(neighbor_pos).drilled)
             neighbors++;
-        it = tiles.find(coords(dst->position.x-1, dst->position.y).tostr());
-        if (it != tiles.end() && !it->second.wrapped)
+        neighbor_pos = coords(dst->position.x, dst->position.y+1);
+        if (rect_t(coords(0,0), coords(map_size)).in_rect(neighbor_pos) && tile(neighbor_pos).drilled)
             neighbors++;
-        it = tiles.find(coords(dst->position.x, dst->position.y+1).tostr());
-        if (it != tiles.end() && !it->second.wrapped)
+        neighbor_pos = coords(dst->position.x-1, dst->position.y);
+        if (rect_t(coords(0,0), coords(map_size)).in_rect(neighbor_pos) && tile(neighbor_pos).drilled)
             neighbors++;
-        it = tiles.find(coords(dst->position.x, dst->position.y-1).tostr());
-        if (it != tiles.end() && !it->second.wrapped)
+        neighbor_pos = coords(dst->position.x, dst->position.y-1);
+        if (rect_t(coords(0,0), coords(map_size)).in_rect(neighbor_pos) && tile(neighbor_pos).drilled)
             neighbors++;
         if(neighbors > 1 || dst->wrapped)
         {
             costMap[arc] += WEIGHT_NOT_LONE_TILE;
         }
-    }
-}
-
-
-void cMap::place_boosters(vector<struct coords> boosters_coords)
-{
-    for(auto booster_coords : boosters_coords)
-    {
-        auto it = tiles.find(booster_coords.tostr());
-        if (it == tiles.end())
-        {
-            cout << "Trying to place booster on not not-existence tile: " << booster_coords.tostr() << endl;
-            exit(-1);
-        }
-        struct map_tile &tile = it->second;
-        tile.position.booster = booster_coords.booster;
-    }
-}
-
-void cMap::draw(void)
-{
-    struct map_tile cur_tile;
-    cout << "      " << "   ";
-    for(int x = 0; x < map_size.x; x++)
-    {
-        cout <<  setw(3) << x;
-    }
-    cout << endl;
-    for(int y = map_size.y-1; y >= 0; y--)
-    {
-        cout << setw(6) << y << "   ";
-        for(int x = 0; x < map_size.x; x++)
-        {
-            auto it = tiles.find(coords(x, y).tostr());
-            if (it != tiles.end())
-            {
-                struct map_tile &tile = it->second;
-                string symbol;
-                string pre  = (tile.wrapped)?"<":" ";
-                string post = (tile.wrapped)?">":" ";
-
-                auto region = in_region(coords(x, y));
-                if(region != nullptr)
-                {
-                    pre = std::to_string(region->get_id());
-                }
-                switch (tile.position.booster)
-                {
-                    case BOOST_NONE: symbol         = pre+"#"+post; break;
-                    case BOOST_EXT_MANIP: symbol    = pre+"B"+post; break;
-                    case BOOST_FAST_WHEELS: symbol  = pre+"F"+post; break;
-                    case BOOST_DRILL: symbol        = pre+"L"+post; break;
-                    case BOOST_X: symbol            = pre+"X"+post; break;
-                    case BOOST_RESET: symbol        = pre+"R"+post; break;
-                default:
-                    cout << "Unknown tile type: " << tile.position.booster << endl;
-                    exit(-1);
-                }
-                cout << symbol;
-            } else
-                cout << "   ";
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
-
-wrappable_e cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wrap)
-{
-    auto worker_pos_it = tiles.find(worker.tostr());
-    if (worker_pos_it == tiles.end())
-    {
-        cout << "Worker can't be here: " << worker.tostr() << endl;
-        exit(-1);
-    }
-
-    struct coords manip = worker + manip_rel;
-
-    auto manip_pos_it = tiles.find(manip.tostr());
-    if (manip_pos_it == tiles.end())
-    {
-        return WRP_WALL;
-    }
-    if (manip_pos_it->second.wrapped)
-    {
-        return WRP_WRAPPED;
-    }
-//FIXME: Cheating: test for reachable
-    if((manip_rel.x > 1) || (manip_rel.x < -1) || (manip_rel.y > 1) || (manip_rel.y < -1))
-    {
-        //long arms
-        struct coords tmp(worker.x + manip_rel.x/2, worker.y + manip_rel.y/2);
-        auto pos_it = tiles.find(tmp.tostr());
-        if (pos_it == tiles.end())
-        {
-            return WRP_CAN_NOT_WRAP;
-        }
-    }
-    if (wrap)
-    {
-        manip_pos_it->second.wrapped = true;
-        return WRP_WRAPRED_OK;
-    }
-    return WRP_CAN_WRAP;
-}
-
-bool cMap::is_unwrapped(struct coords target)
-{
-    auto pos_it = tiles.find(target.tostr());
-    if (pos_it == tiles.end())
-    {
-        return false;
-    }
-    if (pos_it->second.wrapped)
-    {
-        return false;
-    }
-    return true;
-}
-
-boosters_e cMap::pick_booster(struct coords target)
-{
-    auto pos_it = tiles.find(target.tostr());
-    if (pos_it == tiles.end())
-    {
-        return BOOST_NONE;
-    }
-    boosters_e booster = pos_it->second.position.booster;
-    pos_it->second.position.booster = BOOST_NONE;
-    return booster;
-}
-
-void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
-{
-    auto worker_pos_it = tiles.find(worker.tostr());
-    if (worker_pos_it == tiles.end())
-    {
-        cout << "Worker can't be here: " << worker.tostr() << endl;
-        exit(-1);
-    }
-    struct map_tile &worker_pos = worker_pos_it->second;
-    worker_pos.wrapped = true;
-    for(auto manip_rel : manips_rel)
-    {
-        test_wrappable(worker, manip_rel, true);
     }
 }
 
@@ -424,23 +431,23 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     struct coords min_booster(worker);
     int min_dist_boost = -1;
 
-    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
 
-    auto worker_it = tiles.find(worker.tostr());
-    if (worker_it == tiles.end())
+    auto &worker_tile = tile(worker);
+    if (!worker_tile.drilled)
     {
         cout << "Worker can't be here: " << worker.tostr() << endl;
         exit(-1);
     }
-    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
     dijkstra.run(from);
 
-    for (SmartGraph::NodeIt n(graph); n != INVALID; ++n)
+    for (SubGraph<SmartGraph>::NodeIt n(dgraph); n != INVALID; ++n)
     {
-        bool is_booster = (graph_tiles[n]->position.booster == BOOST_EXT_MANIP) ||
-//                          (graph_tiles[n]->position.booster == BOOST_FAST_WHEELS) ||
-                          (graph_tiles[n]->position.booster == BOOST_DRILL);
-        if(region_id >= 0)
+        bool is_booster = (graph_tiles[n]->booster == BOOST_EXT_MANIP) ||
+//                          (graph_tiles[n]->booster == BOOST_FAST_WHEELS) ||
+                          (graph_tiles[n]->booster == BOOST_DRILL);
+       if(region_id >= 0)
         {
             if(!get_region(region_id)->in_region(graph_tiles[n]->position))
                 continue;
@@ -482,23 +489,23 @@ struct coords cMap::find_target(struct coords worker, int region_id)
 
 int cMap::estimate_route(struct coords worker, struct coords target)
 {
-    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
 
-    auto worker_it = tiles.find(worker.tostr());
-    if (worker_it == tiles.end())
+    auto &worker_tile = tile(worker);
+    if (!worker_tile.drilled)
     {
         cout << "Worker can't be here: " << worker.tostr() << endl;
         exit(-1);
     }
-    auto target_it = tiles.find(target.tostr());
-    if (target_it == tiles.end())
+    auto &target_tile = tile(target);
+    if (!target_tile.drilled)
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
         exit(-1);
     }
 
-    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
-    SmartGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
+    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
+    SubGraph<SmartGraph>::Node to   = dgraph.nodeFromId(target_tile.node_id);
 
     dijkstra.run(from, to);
     return dijkstra.dist(to);
@@ -506,50 +513,35 @@ int cMap::estimate_route(struct coords worker, struct coords target)
 
 directions_e cMap::get_direction(struct coords worker, struct coords target)
 {
-    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
     struct coords next(worker);
 
-    auto worker_it = tiles.find(worker.tostr());
-    if (worker_it == tiles.end())
+    auto &worker_tile = tile(worker);
+    if (!worker_tile.drilled)
     {
         cout << "Worker can't be here: " << worker.tostr() << endl;
         exit(-1);
     }
-    auto target_it = tiles.find(target.tostr());
-    if (target_it == tiles.end())
+    auto &target_tile = tile(target);
+    if (!target_tile.drilled)
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
         exit(-1);
     }
 
-    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
-    SmartGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
+    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
+    SubGraph<SmartGraph>::Node to   = dgraph.nodeFromId(target_tile.node_id);
 
     dijkstra.run(from, to);
 
     vector<struct map_tile*> path;
-    for (lemon::SmartGraph::Node v = to; v != from; v = dijkstra.predNode(v))
+    for (SubGraph<SmartGraph>::Node v = to; v != from; v = dijkstra.predNode(v))
     {
-        if (v != lemon::INVALID && dijkstra.reached(v)) //special LEMON node constant
+        if (v != INVALID && dijkstra.reached(v)) //special LEMON node constant
         {
             next = graph_tiles[v]->position;
         }
     }
-
-//    int cost = dijkstra.dist(to);
-//    //print out the path with reverse iterator
-//    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: ";
-//    for (auto p = path.rbegin(); p != path.rend(); ++p)
-//        std::cout << (*p)->position.tostr() << " ";
-//    std::cout << std::endl << "Total cost for the shortest path is: "<< cost << std::endl;
-//
-//    std::cout << "Arcs from node " << worker.tostr() << std::endl;
-//    for (SmartGraph::OutArcIt a(graph, from); a != INVALID; ++a)
-//    {
-//        std::cout << "   Arc " << graph.id(a) << " to node " << graph_tiles[graph.target(a)]->position.tostr() << " cost " << costMap[a] << std::endl;
-//
-//    }
-
 
     int dx = next.x - worker.x;
     int dy = next.y - worker.y;
