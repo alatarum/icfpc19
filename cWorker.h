@@ -60,6 +60,7 @@ private:
     vector<action_t> actions;
     vector<struct coords> manipulators;
     vector<struct coords> potential_manipulators;
+    int boost_drill_timer;
     int boost_wheels;
     int boost_drill;
     int boost_x;

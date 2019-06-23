@@ -82,7 +82,6 @@ void cWorker::take_booster(boosters_e booster)
             cout << "Can't attach manip: " << coords.tostr() << endl;
             return;
         }
-            cout << "use manip: " << coords.tostr() << endl;
         potential_manipulators.pop_back();
         actions.push_back(action_t(ACT_ATTACH_MANIP, coords));
     }; break;

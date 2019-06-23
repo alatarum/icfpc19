@@ -6,7 +6,7 @@
 #include <iostream>
 #include <map>
 #include <vector>
-#include <lemon/list_graph.h>
+#include <lemon/smart_graph.h>
 
 using namespace std;
 using namespace lemon;
@@ -149,9 +149,9 @@ private:
     vector<class cRegion> regions;
 
 
-    ListGraph graph;
-    ListGraph::NodeMap<struct map_tile *> graph_tiles;
-    ListGraph::ArcMap<int> costMap;
+    SmartGraph graph;
+    SmartGraph::NodeMap<struct map_tile *> graph_tiles;
+    SmartGraph::ArcMap<int> costMap;
 
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
 };

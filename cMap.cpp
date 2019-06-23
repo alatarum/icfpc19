@@ -86,7 +86,7 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
             }
             if(border_crosses % 2)
             {
-                ListGraph::Node nd = graph.addNode();
+                SmartGraph::Node nd = graph.addNode();
                 string index = coords(x, y).tostr();
                 tiles[index].position = coords(x, y);
                 tiles[index].node_id = graph.id(nd);
@@ -194,7 +194,6 @@ void cMap::delete_region(int reg_id)
 {
     if(reg_id < 0)
         return;
-cout << "RM region: " << reg_id << endl;
 
     for (auto region = regions.begin(); region != regions.end(); ++region)
     {
@@ -212,7 +211,7 @@ cMap::~cMap()
 
 void cMap::reset_edges_cost()
 {
-    for (ListGraph::ArcIt arc(graph); arc != INVALID; ++arc)
+    for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
     {
         costMap[arc] = WEIGHT_DEFAULT;
     }
@@ -220,7 +219,7 @@ void cMap::reset_edges_cost()
 
 void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
 {
-    for (ListGraph::ArcIt arc(graph); arc != INVALID; ++arc)
+    for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
     {
         auto src = graph_tiles[graph.source(arc)];
         auto dst = graph_tiles[graph.target(arc)];
@@ -425,7 +424,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     struct coords min_booster(worker);
     int min_dist_boost = -1;
 
-    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
 
     auto worker_it = tiles.find(worker.tostr());
     if (worker_it == tiles.end())
@@ -433,10 +432,10 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         cout << "Worker can't be here: " << worker.tostr() << endl;
         exit(-1);
     }
-    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
     dijkstra.run(from);
 
-    for (ListGraph::NodeIt n(graph); n != INVALID; ++n)
+    for (SmartGraph::NodeIt n(graph); n != INVALID; ++n)
     {
         bool is_booster = (graph_tiles[n]->position.booster == BOOST_EXT_MANIP) ||
 //                          (graph_tiles[n]->position.booster == BOOST_FAST_WHEELS) ||
@@ -483,7 +482,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
 
 int cMap::estimate_route(struct coords worker, struct coords target)
 {
-    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
 
     auto worker_it = tiles.find(worker.tostr());
     if (worker_it == tiles.end())
@@ -498,8 +497,8 @@ int cMap::estimate_route(struct coords worker, struct coords target)
         exit(-1);
     }
 
-    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
-    ListGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
+    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    SmartGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
 
     dijkstra.run(from, to);
     return dijkstra.dist(to);
@@ -507,7 +506,7 @@ int cMap::estimate_route(struct coords worker, struct coords target)
 
 directions_e cMap::get_direction(struct coords worker, struct coords target)
 {
-    Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
+    Dijkstra<lemon::SmartGraph> dijkstra(graph, costMap);
     struct coords next(worker);
 
     auto worker_it = tiles.find(worker.tostr());
@@ -523,13 +522,13 @@ directions_e cMap::get_direction(struct coords worker, struct coords target)
         exit(-1);
     }
 
-    ListGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
-    ListGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
+    SmartGraph::Node from = graph.nodeFromId(worker_it->second.node_id);
+    SmartGraph::Node to   = graph.nodeFromId(target_it->second.node_id);
 
     dijkstra.run(from, to);
 
     vector<struct map_tile*> path;
-    for (lemon::ListGraph::Node v = to; v != from; v = dijkstra.predNode(v))
+    for (lemon::SmartGraph::Node v = to; v != from; v = dijkstra.predNode(v))
     {
         if (v != lemon::INVALID && dijkstra.reached(v)) //special LEMON node constant
         {
@@ -545,7 +544,7 @@ directions_e cMap::get_direction(struct coords worker, struct coords target)
 //    std::cout << std::endl << "Total cost for the shortest path is: "<< cost << std::endl;
 //
 //    std::cout << "Arcs from node " << worker.tostr() << std::endl;
-//    for (ListGraph::OutArcIt a(graph, from); a != INVALID; ++a)
+//    for (SmartGraph::OutArcIt a(graph, from); a != INVALID; ++a)
 //    {
 //        std::cout << "   Arc " << graph.id(a) << " to node " << graph_tiles[graph.target(a)]->position.tostr() << " cost " << costMap[a] << std::endl;
 //
