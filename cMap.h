@@ -115,15 +115,24 @@ struct map_tile {
 class cRegion
 {
 public:
-    cRegion(struct coords target): rect(coords(target.x-1,target.y-1), coords(target.x+2,target.y+2)) {}
+    cRegion(struct coords target, SmartGraph &graph);
+    ~cRegion(){}
+    void commit(SmartGraph &graph, SmartGraph::NodeMap<struct map_tile *> &graph_tiles);
     bool in_region(struct coords target) { return rect.in_rect(target); }
     void add(struct coords target);
     rect_t get_rect() {return rect;}
     void set_id(int _id) {id=_id;}
     int get_id() {return id;}
+    SubGraph<SmartGraph> *get_subgraph() {return &dgraph;}
+    SubGraph<SmartGraph>::ArcMap<int> *get_graphcostmap() {return &costMap;}
 private:
     int id;
     rect_t rect;
+
+    SubGraph<SmartGraph> dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> costMap;
+    SmartGraph::NodeMap<bool> graph_filter_node;
+    SmartGraph::EdgeMap<bool> graph_filter_edge;
 };
 
 class cMap
@@ -135,10 +144,10 @@ public:
     void draw(void);
     void try_wrap(struct coords worker, vector<struct coords> manips_rel);
     struct coords find_target(struct coords worker, int region_id);
-    int estimate_route(struct coords worker, struct coords target);
-    directions_e get_direction(struct coords worker, struct coords target);
-    void reset_edges_cost();
-    void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel);
+    int estimate_route(struct coords worker, struct coords target, int region_id);
+    directions_e get_direction(struct coords worker, struct coords target, int region_id);
+    void reset_edges_cost(int region_id);
+    void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel, int region_id);
     bool is_unwrapped(struct coords target);
     boosters_e pick_booster(struct coords target);
 
@@ -149,8 +158,7 @@ public:
 private:
     struct coords map_size;
     vector<vector<struct map_tile> > tiles;
-    vector<class cRegion> regions;
-
+    vector<class cRegion *> regions;
 
     SmartGraph graph;
     SubGraph<SmartGraph> dgraph;
@@ -158,7 +166,6 @@ private:
     SmartGraph::NodeMap<bool> graph_filter_node;
     SmartGraph::EdgeMap<bool> graph_filter_edge;
     SmartGraph::NodeMap<struct map_tile *> graph_tiles;
-
 
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
     bool create_edge(coords node, coords to);

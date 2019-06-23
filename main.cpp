@@ -242,6 +242,7 @@ int main(int argc, char *argv[])
             return -1;
         }
 //    if(verbose)
+//cout << "step "  << steps<< endl;
 //        mine_map->draw();
     }
 

@@ -134,12 +134,38 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
                 {
                    region->add(coords(x, y));
                 } else {
-                    class cRegion new_region(coords(x, y));
-                    new_region.set_id(regions.size());
+                    auto new_region = new cRegion(coords(x, y), graph);
+                    new_region->set_id(regions.size());
                     regions.push_back(new_region);
                 }
             }
         }
+    }
+    for(auto &region: regions)
+    {
+        region->commit(graph, graph_tiles);
+    }
+}
+
+cRegion::cRegion(struct coords target, SmartGraph &graph): rect(coords(target.x-1,target.y-1), coords(target.x+2,target.y+2)),
+        graph_filter_node(graph, true), graph_filter_edge(graph, true),
+        dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1)
+{
+}
+
+void cRegion::commit(SmartGraph &graph, SmartGraph::NodeMap<struct map_tile *> &graph_tiles)
+{
+    for (SmartGraph::EdgeIt e(graph); e != INVALID; ++e)
+    {
+        graph_filter_edge[e]= true;
+    }
+    for (SmartGraph::NodeIt n(graph); n != INVALID; ++n)
+    {
+        auto tile = graph_tiles[n];
+        if(in_region(tile->position) && tile->drilled)
+            graph_filter_node[n]= true;
+        else
+            graph_filter_node[n]= false;
     }
 }
 
@@ -163,8 +189,8 @@ class cRegion * cMap::in_region(struct coords target)
 {
     for(auto &region: regions)
     {
-        if(region.in_region(target))
-            return &region;
+        if(region->in_region(target))
+            return region;
     }
 
     return nullptr;
@@ -176,8 +202,8 @@ class cRegion * cMap::get_region(int reg_id)
         return nullptr;
     for(auto &region: regions)
     {
-        if(region.get_id() == reg_id)
-            return &region;
+        if(region->get_id() == reg_id)
+            return region;
     }
 
     return nullptr;
@@ -190,8 +216,9 @@ void cMap::delete_region(int reg_id)
 
     for (auto region = regions.begin(); region != regions.end(); ++region)
     {
-        if(region->get_id() == reg_id)
+        if((*region)->get_id() == reg_id)
         {
+            delete *region;
             regions.erase(region);
             return;
         }
@@ -360,29 +387,39 @@ bool cMap::create_edge(coords node, coords to)
     return result;
 }
 
-void cMap::reset_edges_cost()
+void cMap::reset_edges_cost(int region_id)
 {
+    SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
+    if(region_id >= 0)
+    {
+        cm = get_region(region_id)->get_graphcostmap();
+    }
     for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
     {
-        costMap[arc] = WEIGHT_DEFAULT;
+        (*cm)[arc] = WEIGHT_DEFAULT;
     }
 }
 
-void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
+void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int region_id)
 {
+    SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
+    if(region_id >= 0)
+    {
+        cm = get_region(region_id)->get_graphcostmap();
+    }
     for (SubGraph<SmartGraph>::ArcIt arc(dgraph); arc != INVALID; ++arc)
     {
         auto src = graph_tiles[graph.source(arc)];
         auto dst = graph_tiles[graph.target(arc)];
         bool vertical_edge = src->position.x == dst->position.x;
-        costMap[arc] = WEIGHT_DEFAULT;
+        (*cm)[arc] = WEIGHT_DEFAULT;
         if(vertical_edge != is_vertical)
         {
-            costMap[arc] += WEIGHT_NOT_STRAIGHT_DIR;
+            (*cm)[arc] += WEIGHT_NOT_STRAIGHT_DIR;
         }
         if(dst->wrapped == true)
         {
-            costMap[arc] += WEIGHT_NOT_UNWRAPPED_DST;
+            (*cm)[arc] += WEIGHT_NOT_UNWRAPPED_DST;
         }
         for(auto manip_coord: manips)
         {
@@ -390,11 +427,11 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
             switch(wrp)
             {
             case WRP_WALL:
-                costMap[arc] += WEIGHT_WALL_MANIP;
+                (*cm)[arc] += WEIGHT_WALL_MANIP;
                 break;
             case WRP_WRAPPED:
             case WRP_CAN_NOT_WRAP:
-                costMap[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
+                (*cm)[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
                 break;
             }
         }
@@ -416,7 +453,7 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
             neighbors++;
         if(neighbors > 1 || dst->wrapped)
         {
-            costMap[arc] += WEIGHT_NOT_LONE_TILE;
+            (*cm)[arc] += WEIGHT_NOT_LONE_TILE;
         }
     }
 }
@@ -431,7 +468,14 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     struct coords min_booster(worker);
     int min_dist_boost = -1;
 
-    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
+    SubGraph<SmartGraph> *sg = &dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
+    if(region_id >= 0)
+    {
+        sg = get_region(region_id)->get_subgraph();
+        cm = get_region(region_id)->get_graphcostmap();
+    }
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
     auto &worker_tile = tile(worker);
     if (!worker_tile.drilled)
@@ -439,19 +483,16 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         cout << "Worker can't be here: " << worker.tostr() << endl;
         exit(-1);
     }
-    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
+    SubGraph<SmartGraph>::Node from = sg->nodeFromId(worker_tile.node_id);
     dijkstra.run(from);
 
-    for (SubGraph<SmartGraph>::NodeIt n(dgraph); n != INVALID; ++n)
+    for (SubGraph<SmartGraph>::NodeIt n(*sg); n != INVALID; ++n)
     {
+        if(!dijkstra.reached(n))
+            continue;
         bool is_booster = (graph_tiles[n]->booster == BOOST_EXT_MANIP) ||
 //                          (graph_tiles[n]->booster == BOOST_FAST_WHEELS) ||
                           (graph_tiles[n]->booster == BOOST_DRILL);
-       if(region_id >= 0)
-        {
-            if(!get_region(region_id)->in_region(graph_tiles[n]->position))
-                continue;
-        }
         if((graph_tiles[n]->wrapped == true) && (is_booster == false))
             continue;
         int dist = dijkstra.dist(n);
@@ -487,9 +528,16 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     return target;
 }
 
-int cMap::estimate_route(struct coords worker, struct coords target)
+int cMap::estimate_route(struct coords worker, struct coords target, int region_id)
 {
-    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
+    SubGraph<SmartGraph> *sg = &dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
+    if(region_id >= 0)
+    {
+        sg = get_region(region_id)->get_subgraph();
+        cm = get_region(region_id)->get_graphcostmap();
+    }
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
     auto &worker_tile = tile(worker);
     if (!worker_tile.drilled)
@@ -504,16 +552,25 @@ int cMap::estimate_route(struct coords worker, struct coords target)
         exit(-1);
     }
 
-    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
-    SubGraph<SmartGraph>::Node to   = dgraph.nodeFromId(target_tile.node_id);
+    SubGraph<SmartGraph>::Node from = sg->nodeFromId(worker_tile.node_id);
+    SubGraph<SmartGraph>::Node to   = sg->nodeFromId(target_tile.node_id);
 
     dijkstra.run(from, to);
+    if(!dijkstra.reached(to))
+        return -1;
     return dijkstra.dist(to);
 }
 
-directions_e cMap::get_direction(struct coords worker, struct coords target)
+directions_e cMap::get_direction(struct coords worker, struct coords target, int region_id)
 {
-    Dijkstra<SubGraph<SmartGraph>> dijkstra(dgraph, costMap);
+    SubGraph<SmartGraph> *sg = &dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
+    if(region_id >= 0)
+    {
+        sg = get_region(region_id)->get_subgraph();
+        cm = get_region(region_id)->get_graphcostmap();
+    }
+    Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
     struct coords next(worker);
 
     auto &worker_tile = tile(worker);
@@ -529,14 +586,21 @@ directions_e cMap::get_direction(struct coords worker, struct coords target)
         exit(-1);
     }
 
-    SubGraph<SmartGraph>::Node from = dgraph.nodeFromId(worker_tile.node_id);
-    SubGraph<SmartGraph>::Node to   = dgraph.nodeFromId(target_tile.node_id);
+    SubGraph<SmartGraph>::Node from = sg->nodeFromId(worker_tile.node_id);
+    SubGraph<SmartGraph>::Node to   = sg->nodeFromId(target_tile.node_id);
 
     dijkstra.run(from, to);
+    if(!dijkstra.reached(to))
+        return DIR_COUNT;
 
     vector<struct map_tile*> path;
     for (SubGraph<SmartGraph>::Node v = to; v != from; v = dijkstra.predNode(v))
     {
+        if((dgraph.id(v) == 1) &&
+           (dgraph.id(dijkstra.predNode(v)) == 1))
+        {
+            return DIR_COUNT;
+        }
         if (v != INVALID && dijkstra.reached(v)) //special LEMON node constant
         {
             next = graph_tiles[v]->position;

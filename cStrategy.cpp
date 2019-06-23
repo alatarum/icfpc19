@@ -27,7 +27,7 @@ bool cStrategy::step()
     struct coords region_size = (region != nullptr)?region->get_rect().size():mine_map->get_size();
     if(!mine_map->is_unwrapped(cur_target))
     {
-        mine_map->reset_edges_cost();
+        mine_map->reset_edges_cost(cur_region);
         cur_target = mine_map->find_target(cur_pos, cur_region);
         if(cur_target == cur_pos)
         {
@@ -47,8 +47,8 @@ bool cStrategy::step()
     directions_e manip_dir;
     for(int tmp_dir = DIR_RI; tmp_dir <= DIR_DN; tmp_dir++)
     {
-        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir));
-        int cost = mine_map->estimate_route(cur_pos, cur_target);
+        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir), cur_region);
+        int cost = mine_map->estimate_route(cur_pos, cur_target, cur_region);
         auto angle = worker->get_rotation_angle((directions_e)tmp_dir);
         switch(angle)
         {
@@ -61,15 +61,15 @@ bool cStrategy::step()
             cost += ROTATION_COST*2;
             break;
         }
-        if((min_cost < 0) || (cost < min_cost))
+        if(((min_cost < 0) || (cost < min_cost)) && (cost >= 0))
         {
             min_cost = cost;
             manip_dir = (directions_e)tmp_dir;
         }
     }
 
-    mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir));
-    directions_e move_dir = mine_map->get_direction(cur_pos, cur_target);
+    mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region);
+    directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);
 //3. wrap tiles
     mine_map->try_wrap(cur_pos, worker->get_manip_rel_pos());
 
@@ -93,7 +93,9 @@ bool cStrategy::step()
         break;
     default:
         cout << "Unknown direction: " << move_dir << endl;
-        exit(-1);
+        mine_map->delete_region(cur_region);
+        cur_region = -1;
+        return true;
     }
     worker->do_action(action);
 //5. check for booster
