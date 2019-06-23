@@ -26,6 +26,13 @@ bool cStrategy::step()
             cur_target = cur_pos;
         }
     }
+    if(!worker->wheel_active())
+    {
+        int dx = cur_pos.x-cur_target.x;
+        int dy = cur_pos.y-cur_target.y;
+        if((dx*dx + dy*dy) < 4)
+            cur_target = cur_pos;
+    }
 
     target_live++;
     if(target_live>30)
@@ -108,6 +115,8 @@ bool cStrategy::step()
                 cur_region = DRILL_ACTIVATED;
         }
     }
+    if((worker->have_wheel()) && (!worker->wheel_active()))
+        worker->do_activate_wheel();
 
     mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region);
     directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);

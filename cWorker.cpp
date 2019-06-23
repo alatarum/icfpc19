@@ -106,9 +106,10 @@ void cWorker::take_booster(boosters_e booster)
 void cWorker::push_action(action_t act)
 {
     if(boost_drill_timer > 0) boost_drill_timer--;
+    if(boost_wheel_timer > 0) boost_wheel_timer--;
     actions.push_back(act);
-    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
-    cout << dump_log() << endl;
+//    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
+//    cout << dump_log() << endl;
 }
 
 
@@ -141,6 +142,37 @@ void cWorker::do_move(actions_e act)
             return;
     }
     cur_position = target;
+
+
+    if(wheel_active())
+    {
+        switch(act)
+        {
+        case ACT_MOVE_RI:
+            target.x++;
+            break;
+        case ACT_MOVE_DN:
+            target.y--;
+            break;
+        case ACT_MOVE_LE:
+            target.x--;
+            break;
+        case ACT_MOVE_UP:
+            target.y++;
+            break;
+        default:
+            cout << "Unknown action: " << act << endl;
+            exit(-1);
+        }
+        if(drill_active())
+        {
+            mine_map->drill_tile(target);
+            cur_position = target;
+        } else {
+            if(mine_map->is_accessible(target))
+                cur_position = target;
+        }
+    }
     push_action(action_t(act));
 }
 
@@ -186,6 +218,16 @@ bool cWorker::do_activate_drill()
     push_action(action_t(ACT_ATTACH_DRILL));
     boost_drill --;
     boost_drill_timer = DRILL_DURACTION;
+    return true;
+}
+bool cWorker::do_activate_wheel()
+{
+    if(boost_wheel <= 0)
+        return false;
+    push_action(action_t(ACT_ATTACH_FAST));
+    boost_wheel --;
+    boost_wheel_timer = WHEEL_DURACTION;
+    return true;
 }
 
 string cWorker::dump_log()
