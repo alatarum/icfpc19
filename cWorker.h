@@ -23,6 +23,15 @@ enum actions_e {
     ACT_COUNT
 };
 
+struct action_t {
+    enum actions_e act;
+    struct coords pos;
+
+    action_t(): act(ACT_COUNT), pos(0, 0) {}
+    action_t(actions_e _act): act(_act), pos(0, 0) {}
+    action_t(actions_e _act, struct coords _pos): act(_act), pos(_pos) {}
+};
+
 enum angle_e {
     ALPHA_0   = 0,
     ALPHA_90  = 1,
@@ -37,9 +46,10 @@ public:
     virtual ~cWorker();
     const struct coords& get_pos() {return cur_position;}
     vector<struct coords> get_manip_rel_pos(directions_e direction = DIR_COUNT);
+    void take_booster(boosters_e booster);
+
     void do_action(actions_e act);
     void do_rotate_manip(angle_e alpha);
-
 
     angle_e get_rotation_angle(directions_e target_direction);
     string dump_log();
@@ -47,10 +57,16 @@ public:
 private:
     struct coords cur_position;
     directions_e cur_direction;
-    vector<actions_e> actions;
+    vector<action_t> actions;
     vector<struct coords> manipulators;
+    vector<struct coords> potential_manipulators;
+    int boost_wheels;
+    int boost_drill;
+    int boost_x;
+    int boost_reset;
 
     struct coords rotate_manip(angle_e alpha, struct coords manip);
+    bool try_attach_manip(struct coords new_manip);
 };
 
 #endif // CWORKER_H

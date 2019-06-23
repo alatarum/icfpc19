@@ -6,9 +6,10 @@
 
 static const int WEIGHT_DEFAULT = 1;
 static const int WEIGHT_NOT_LONE_TILE = 25;
-static const int WEIGHT_NOT_STRAIGHT_DIR = 10;
-static const int WEIGHT_NOT_UNWRAPPED_DST = 1;
-static const int WEIGHT_NOT_UNWRAPPED_MANIP = 8;
+static const int WEIGHT_NOT_STRAIGHT_DIR = 15;
+static const int WEIGHT_NOT_UNWRAPPED_DST = 4;
+static const int WEIGHT_NOT_UNWRAPPED_MANIP = 6;
+static const int WEIGHT_WALL_MANIP = 8;
 
 using namespace std;
 
@@ -235,9 +236,16 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips)
         }
         for(auto manip_coord: manips)
         {
-            if(!test_wrappable(dst->position, manip_coord, false))
+            wrappable_e wrp = test_wrappable(dst->position, manip_coord, false);
+            switch(wrp)
             {
+            case WRP_WALL:
+                costMap[arc] += WEIGHT_WALL_MANIP;
+                break;
+            case WRP_WRAPPED:
+            case WRP_CAN_NOT_WRAP:
                 costMap[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
+                break;
             }
         }
 
@@ -326,7 +334,7 @@ void cMap::draw(void)
     cout << endl;
 }
 
-bool cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wrap)
+wrappable_e cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wrap)
 {
     auto worker_pos_it = tiles.find(worker.tostr());
     if (worker_pos_it == tiles.end())
@@ -340,16 +348,29 @@ bool cMap::test_wrappable(struct coords worker, struct coords manip_rel, bool wr
     auto manip_pos_it = tiles.find(manip.tostr());
     if (manip_pos_it == tiles.end())
     {
-        return false;
+        return WRP_WALL;
     }
     if (manip_pos_it->second.wrapped)
     {
-        return false;
+        return WRP_WRAPPED;
     }
-//TODO: test for reachable
+//FIXME: Cheating: test for reachable
+    if((manip_rel.x > 1) || (manip_rel.x < -1) || (manip_rel.y > 1) || (manip_rel.y < -1))
+    {
+        //long arms
+        struct coords tmp(worker.x + manip_rel.x/2, worker.y + manip_rel.y/2);
+        auto pos_it = tiles.find(tmp.tostr());
+        if (pos_it == tiles.end())
+        {
+            return WRP_CAN_NOT_WRAP;
+        }
+    }
     if (wrap)
+    {
         manip_pos_it->second.wrapped = true;
-    return true;
+        return WRP_WRAPRED_OK;
+    }
+    return WRP_CAN_WRAP;
 }
 
 bool cMap::is_unwrapped(struct coords target)
@@ -366,6 +387,18 @@ bool cMap::is_unwrapped(struct coords target)
     return true;
 }
 
+boosters_e cMap::pick_booster(struct coords target)
+{
+    auto pos_it = tiles.find(target.tostr());
+    if (pos_it == tiles.end())
+    {
+        return BOOST_NONE;
+    }
+    boosters_e booster = pos_it->second.position.booster;
+    pos_it->second.position.booster = BOOST_NONE;
+    return booster;
+}
+
 void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
 {
     auto worker_pos_it = tiles.find(worker.tostr());
@@ -376,7 +409,6 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
     }
     struct map_tile &worker_pos = worker_pos_it->second;
     worker_pos.wrapped = true;
-//TODO: collect boosters
     for(auto manip_rel : manips_rel)
     {
         test_wrappable(worker, manip_rel, true);
@@ -386,10 +418,12 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
 struct coords cMap::find_target(struct coords worker, int region_id)
 {
 //looking for far point in region
-    struct coords min_target(worker);
     struct coords max_target(worker);
-    int min_dist = -1;
     int max_dist = 0;
+    struct coords min_target(worker);
+    int min_dist = -1;
+    struct coords min_booster(worker);
+    int min_dist_boost = -1;
 
     Dijkstra<lemon::ListGraph> dijkstra(graph, costMap);
 
@@ -404,13 +438,16 @@ struct coords cMap::find_target(struct coords worker, int region_id)
 
     for (ListGraph::NodeIt n(graph); n != INVALID; ++n)
     {
-        if(graph_tiles[n]->wrapped == true)
-            continue;
+        bool is_booster = (graph_tiles[n]->position.booster == BOOST_EXT_MANIP) ||
+//                          (graph_tiles[n]->position.booster == BOOST_FAST_WHEELS) ||
+                          (graph_tiles[n]->position.booster == BOOST_DRILL);
         if(region_id >= 0)
         {
             if(!get_region(region_id)->in_region(graph_tiles[n]->position))
                 continue;
         }
+        if((graph_tiles[n]->wrapped == true) && (is_booster == false))
+            continue;
         int dist = dijkstra.dist(n);
         if(min_dist < 0 || dist < min_dist)
         {
@@ -427,12 +464,20 @@ struct coords cMap::find_target(struct coords worker, int region_id)
                 max_target = graph_tiles[n]->position;
             }
         }
-
+        if((is_booster) && (min_dist_boost < 0 || dist < min_dist_boost))
+        {
+            min_dist_boost = dist;
+            min_booster = graph_tiles[n]->position;
+        }
     }
     struct coords target((max_dist>0)?max_target:min_target);
-    int tgt_dist = (max_dist>0)?max_dist:min_dist;
-    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
+//    int tgt_dist = (max_dist>0)?max_dist:min_dist;
+//    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
 
+    if(min_dist_boost > 0 && min_dist_boost < 5)
+    {
+        target = min_booster;
+    }
     return target;
 }
 

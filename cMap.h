@@ -36,7 +36,7 @@ struct coords
     coords(int _x, int _y, boosters_e _b): x(_x), y(_y), booster(_b) {}
     string tostr() {
         std::ostringstream sstr;
-        sstr << "(" << x << ";" << y << ")";
+        sstr << "(" << x << "," << y << ")";
         return sstr.str();
         }
     string tostr_full() {
@@ -91,6 +91,15 @@ enum directions_e {
     DIR_COUNT
 };
 
+enum wrappable_e {
+    WRP_WALL,
+    WRP_WRAPPED,
+    WRP_CAN_NOT_WRAP,
+    WRP_CAN_WRAP,
+    WRP_WRAPRED_OK,
+    WRP_COUNT
+};
+
 struct map_tile {
     map_tile(): position(0, 0), wrapped(false), node_id(-1) {
     }
@@ -112,9 +121,6 @@ public:
 private:
     int id;
     rect_t rect;
-//    ListGraph graph;
-//    ListGraph::NodeMap<struct map_tile *> graph_tiles;
-//    ListGraph::ArcMap<int> costMap;
 };
 
 class cMap
@@ -131,6 +137,7 @@ public:
     void reset_edges_cost();
     void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel);
     bool is_unwrapped(struct coords target);
+    boosters_e pick_booster(struct coords target);
 
     struct coords get_size() {return map_size;}
     class cRegion * in_region(struct coords target);
@@ -146,7 +153,7 @@ private:
     ListGraph::NodeMap<struct map_tile *> graph_tiles;
     ListGraph::ArcMap<int> costMap;
 
-    bool test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
+    wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
 };
 
 #endif // CMAP_H

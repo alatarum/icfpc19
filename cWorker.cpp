@@ -1,11 +1,19 @@
 #include "cWorker.h"
 
 cWorker::cWorker(struct coords pos) :
-    cur_position(pos), cur_direction(DIR_RI)
+    cur_position(pos), cur_direction(DIR_RI),
+    boost_wheels(0), boost_drill(0), boost_x(0), boost_reset(0)
 {
     manipulators.push_back(coords(1, -1));
     manipulators.push_back(coords(1, 0));
     manipulators.push_back(coords(1, 1));
+    potential_manipulators.push_back(coords(0, -1));
+    potential_manipulators.push_back(coords(0, 1));
+    potential_manipulators.push_back(coords(-1, -1));
+    potential_manipulators.push_back(coords(-1, 1));
+    potential_manipulators.push_back(coords(-2, 0));
+    potential_manipulators.push_back(coords(-1, 0));
+    potential_manipulators.push_back(coords(2, 0));
 }
 
 cWorker::~cWorker()
@@ -52,6 +60,47 @@ vector<struct coords> cWorker::get_manip_rel_pos(directions_e direction)
     return manipulators_coords;
 }
 
+bool cWorker::try_attach_manip(struct coords new_manip)
+{
+    for(auto manip : manipulators)
+    {
+        if (new_manip == manip)
+            return false;
+    }
+    manipulators.push_back(new_manip);
+    return true;
+}
+
+void cWorker::take_booster(boosters_e booster)
+{
+    switch(booster)
+    {
+    case BOOST_EXT_MANIP: {
+        auto coords = potential_manipulators.back();
+        if(!try_attach_manip(coords))
+        {
+            cout << "Can't attach manip: " << coords.tostr() << endl;
+            return;
+        }
+            cout << "use manip: " << coords.tostr() << endl;
+        potential_manipulators.pop_back();
+        actions.push_back(action_t(ACT_ATTACH_MANIP, coords));
+    }; break;
+    case BOOST_FAST_WHEELS:
+        boost_wheels++;
+        break;
+    case BOOST_DRILL:
+        boost_drill++;
+        break;
+    case BOOST_X:
+        boost_x++;
+        break;
+    case BOOST_RESET:
+        boost_reset++;
+        break;
+    }
+}
+
 void cWorker::do_action(actions_e act)
 {
     switch(act)
@@ -72,7 +121,7 @@ void cWorker::do_action(actions_e act)
         cout << "Unknown action: " << act << endl;
         exit(-1);
     }
-    actions.push_back(act);
+    actions.push_back(action_t(act));
 }
 
 void cWorker::do_rotate_manip(angle_e alpha)
@@ -86,7 +135,7 @@ void cWorker::do_rotate_manip(angle_e alpha)
         steps++;
         if (steps > 3) steps -= 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(ACT_TURN_CCW);
+        actions.push_back(action_t(ACT_TURN_CCW));
     }; break;
     case ALPHA_180: {
         int steps = (int)cur_direction;
@@ -94,15 +143,15 @@ void cWorker::do_rotate_manip(angle_e alpha)
         steps++;
         if (steps > 3) steps -= 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(ACT_TURN_CCW);
-        actions.push_back(ACT_TURN_CCW);
+        actions.push_back(action_t(ACT_TURN_CCW));
+        actions.push_back(action_t(ACT_TURN_CCW));
     }; break;
     case ALPHA_270: {
         int steps = (int)cur_direction;
         steps--;
         if (steps < 0) steps += 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(ACT_TURN_CW);
+        actions.push_back(action_t(ACT_TURN_CW));
     }; break;
     default:
         cout << "Unknown angle: " << alpha << endl;
@@ -115,7 +164,7 @@ string cWorker::dump_log()
     string log;
     for(auto act: actions)
     {
-        switch(act)
+        switch(act.act)
         {
         case ACT_MOVE_RI:
             log += "D";
@@ -135,8 +184,11 @@ string cWorker::dump_log()
         case ACT_TURN_CCW:
             log += "Q";
             break;
+        case ACT_ATTACH_MANIP:
+            log += "B" + act.pos.tostr();;
+            break;
         default:
-            cout << "Unknown action: " << act << endl;
+            cout << "Unknown action: " << act.act << endl;
             exit(-1);
         }
     }

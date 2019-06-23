@@ -1,6 +1,6 @@
 #include "cStrategy.h"
 
-static const int ROTATION_COST = 2;
+static const int ROTATION_COST = 5;
 
 cStrategy::cStrategy(cMap *mine_map, cWorker *worker):
     mine_map(mine_map), worker(worker), cur_target(worker->get_pos()), cur_region(-1)
@@ -28,7 +28,6 @@ bool cStrategy::step()
     if(!mine_map->is_unwrapped(cur_target))
     {
         mine_map->reset_edges_cost();
-cout << "In region: " << cur_region << endl;
         cur_target = mine_map->find_target(cur_pos, cur_region);
         if(cur_target == cur_pos)
         {
@@ -97,5 +96,14 @@ cout << "In region: " << cur_region << endl;
         exit(-1);
     }
     worker->do_action(action);
+//5. check for booster
+    boosters_e booster = mine_map->pick_booster(worker->get_pos());
+    {
+        if(booster != BOOST_NONE)
+        {
+            coords tmp_pos = worker->get_pos();
+            worker->take_booster(booster);
+        }
+    }
     return true;
 }
