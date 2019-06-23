@@ -45,15 +45,20 @@ public:
     cWorker(struct coords pos);
     virtual ~cWorker();
     const struct coords& get_pos() {return cur_position;}
+    directions_e get_dir() {return cur_direction;}
     vector<struct coords> get_manip_rel_pos(directions_e direction = DIR_COUNT);
     void take_booster(boosters_e booster);
+    bool drill_active() {return (boost_drill_timer > 0)? true: false;}
+    bool have_drill()   {return (boost_drill > 0)? true: false;}
 
     void do_action(actions_e act);
     void do_rotate_manip(angle_e alpha);
+    bool do_activate_drill();
 
     angle_e get_rotation_angle(directions_e target_direction);
     string dump_log();
 
+    cMap *mine_map;
 private:
     struct coords cur_position;
     directions_e cur_direction;
@@ -68,6 +73,7 @@ private:
 
     struct coords rotate_manip(angle_e alpha, struct coords manip);
     bool try_attach_manip(struct coords new_manip);
+    void push_action(action_t act);
 };
 
 #endif // CWORKER_H

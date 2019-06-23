@@ -6,7 +6,7 @@
 
 static const int WEIGHT_DEFAULT = 1;
 static const int WEIGHT_NOT_LONE_TILE = 25;
-static const int WEIGHT_NOT_STRAIGHT_DIR = 15;
+static const int WEIGHT_NOT_STRAIGHT_DIR = 18;
 static const int WEIGHT_NOT_UNWRAPPED_DST = 4;
 static const int WEIGHT_NOT_UNWRAPPED_MANIP = 6;
 static const int WEIGHT_WALL_MANIP = 8;
@@ -22,7 +22,9 @@ struct vertical_line
 cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>> obstacles_list) :
     map_size(0, 0), graph(), graph_tiles(graph),
     graph_filter_node(graph, false), graph_filter_edge(graph, true),
-    dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1)
+    dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1),
+    graph_full_node(graph, false), graph_full_edge(graph, true),
+    fgraph(graph, graph_full_node, graph_full_edge), fcostMap(fgraph, 1)
 {
 //1. determine map size and extract vertical lines for borders
     vector<struct vertical_line> lines;
@@ -96,8 +98,13 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
             {
                 tiles[x][y].drilled = true;
             }
+            if(tiles[x][y].drilled)
+                tiles[x][y].wrapped = false;
+            else
+                tiles[x][y].wrapped = true;
             graph_tiles[nd] = &(tiles[x][y]);
             graph_filter_node[nd] = tiles[x][y].drilled;
+            graph_full_node[nd] = true;
         }
     }
 
@@ -368,6 +375,26 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
     }
 }
 
+void cMap::drill_tile(struct coords target)
+{
+cout << "drill_tile: " << target.tostr() << endl;
+    if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
+    {
+        return;
+    }
+cout << "drill allowed: " << endl;
+    auto &target_tile = tile(target);
+    target_tile.wrapped = true;
+    target_tile.drilled = true;
+    target_tile.booster = BOOST_NONE;
+cout << "commiting: " << endl;
+    for(auto &region: regions)
+    {
+        region->commit(graph, graph_tiles);
+    }
+    graph_filter_node[graph.nodeFromId(target_tile.node_id)] = true;
+cout << "Done: " << target_tile.node_id << endl;
+}
 
 bool cMap::create_edge(coords node, coords to)
 {
@@ -384,6 +411,7 @@ bool cMap::create_edge(coords node, coords to)
         if(graph.id(opp_node) == graph.id(next)) return result;
     }
     graph_filter_edge[graph.addEdge(from, next)] = true;
+    graph_full_edge[graph.addEdge(from, next)] = true;
     return result;
 }
 
@@ -393,10 +421,13 @@ void cMap::reset_edges_cost(int region_id)
     if(region_id >= 0)
     {
         cm = get_region(region_id)->get_graphcostmap();
+    } else if (region_id == DRILL_ACTIVATED) {
+        cm = &fcostMap;
     }
     for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
     {
         (*cm)[arc] = WEIGHT_DEFAULT;
+        fcostMap[arc] = WEIGHT_DEFAULT;
     }
 }
 
@@ -406,6 +437,8 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int
     if(region_id >= 0)
     {
         cm = get_region(region_id)->get_graphcostmap();
+    } else if (region_id == DRILL_ACTIVATED) {
+        cm = &fcostMap;
     }
     for (SubGraph<SmartGraph>::ArcIt arc(dgraph); arc != INVALID; ++arc)
     {
@@ -455,6 +488,7 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int
         {
             (*cm)[arc] += WEIGHT_NOT_LONE_TILE;
         }
+        fcostMap[arc] = (*cm)[arc];
     }
 }
 
@@ -474,6 +508,9 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     {
         sg = get_region(region_id)->get_subgraph();
         cm = get_region(region_id)->get_graphcostmap();
+    } else if (region_id == DRILL_ACTIVATED) {
+        sg = &fgraph;
+        cm = &fcostMap;
     }
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
@@ -502,10 +539,10 @@ struct coords cMap::find_target(struct coords worker, int region_id)
             min_target = graph_tiles[n]->position;
         }
 
-        if(region_id >= 0)
+        if(region_id != REGION_NOT_SELECTED)
         {
             struct coords tmp_sz(rect_t(worker, graph_tiles[n]->position).size());
-            if(max_dist < dist && dist < 8 && ((tmp_sz.x<2) || (tmp_sz.y<2)))
+            if(max_dist < dist && dist < 15 && ((tmp_sz.x<2) || (tmp_sz.y<2)))
             {
                 max_dist = dist;
                 max_target = graph_tiles[n]->position;
@@ -518,6 +555,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         }
     }
     struct coords target((max_dist>0)?max_target:min_target);
+
 //    int tgt_dist = (max_dist>0)?max_dist:min_dist;
 //    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
 
@@ -536,6 +574,9 @@ int cMap::estimate_route(struct coords worker, struct coords target, int region_
     {
         sg = get_region(region_id)->get_subgraph();
         cm = get_region(region_id)->get_graphcostmap();
+    } else if (region_id == DRILL_ACTIVATED) {
+        sg = &fgraph;
+        cm = &fcostMap;
     }
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
@@ -546,10 +587,10 @@ int cMap::estimate_route(struct coords worker, struct coords target, int region_
         exit(-1);
     }
     auto &target_tile = tile(target);
-    if (!target_tile.drilled)
+    if (!target_tile.drilled && (region_id != DRILL_ACTIVATED))
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
-        exit(-1);
+        return -1;
     }
 
     SubGraph<SmartGraph>::Node from = sg->nodeFromId(worker_tile.node_id);
@@ -569,6 +610,9 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
     {
         sg = get_region(region_id)->get_subgraph();
         cm = get_region(region_id)->get_graphcostmap();
+    } else if (region_id == DRILL_ACTIVATED) {
+        sg = &fgraph;
+        cm = &fcostMap;
     }
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
     struct coords next(worker);
@@ -580,10 +624,10 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
         exit(-1);
     }
     auto &target_tile = tile(target);
-    if (!target_tile.drilled)
+    if (!target_tile.drilled && (region_id != DRILL_ACTIVATED))
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
-        exit(-1);
+        return DIR_COUNT;
     }
 
     SubGraph<SmartGraph>::Node from = sg->nodeFromId(worker_tile.node_id);
@@ -596,8 +640,8 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
     vector<struct map_tile*> path;
     for (SubGraph<SmartGraph>::Node v = to; v != from; v = dijkstra.predNode(v))
     {
-        if((dgraph.id(v) == 1) &&
-           (dgraph.id(dijkstra.predNode(v)) == 1))
+        if((sg->id(v) == 1) &&
+           (sg->id(dijkstra.predNode(v)) == 1))
         {
             return DIR_COUNT;
         }

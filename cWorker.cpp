@@ -2,17 +2,20 @@
 
 cWorker::cWorker(struct coords pos) :
     cur_position(pos), cur_direction(DIR_RI),
-    boost_wheels(0), boost_drill(0), boost_x(0), boost_reset(0)
+    boost_wheels(0), boost_drill(0), boost_x(0), boost_reset(0),
+    boost_drill_timer(0)
 {
     manipulators.push_back(coords(1, -1));
     manipulators.push_back(coords(1, 0));
     manipulators.push_back(coords(1, 1));
+    potential_manipulators.push_back(coords(0, -4));
+    potential_manipulators.push_back(coords(0, 4));
+    potential_manipulators.push_back(coords(0, -3));
+    potential_manipulators.push_back(coords(0, 3));
+    potential_manipulators.push_back(coords(0, -3));
     potential_manipulators.push_back(coords(0, -1));
+    potential_manipulators.push_back(coords(0, 2));
     potential_manipulators.push_back(coords(0, 1));
-    potential_manipulators.push_back(coords(-1, -1));
-    potential_manipulators.push_back(coords(-1, 1));
-    potential_manipulators.push_back(coords(-2, 0));
-    potential_manipulators.push_back(coords(-1, 0));
     potential_manipulators.push_back(coords(2, 0));
 }
 
@@ -77,18 +80,19 @@ void cWorker::take_booster(boosters_e booster)
     {
     case BOOST_EXT_MANIP: {
         auto coords = potential_manipulators.back();
+        potential_manipulators.pop_back();
         if(!try_attach_manip(coords))
         {
             cout << "Can't attach manip: " << coords.tostr() << endl;
             return;
         }
-        potential_manipulators.pop_back();
-        actions.push_back(action_t(ACT_ATTACH_MANIP, coords));
+        push_action(action_t(ACT_ATTACH_MANIP, rotate_manip((angle_e) cur_direction, coords)));
     }; break;
     case BOOST_FAST_WHEELS:
         boost_wheels++;
         break;
     case BOOST_DRILL:
+cout << "drill found" << endl;
         boost_drill++;
         break;
     case BOOST_X:
@@ -99,6 +103,15 @@ void cWorker::take_booster(boosters_e booster)
         break;
     }
 }
+
+void cWorker::push_action(action_t act)
+{
+    if(boost_drill_timer > 0) boost_drill_timer--;
+    actions.push_back(act);
+//    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
+//    cout << dump_log() << endl;
+}
+
 
 void cWorker::do_action(actions_e act)
 {
@@ -120,7 +133,12 @@ void cWorker::do_action(actions_e act)
         cout << "Unknown action: " << act << endl;
         exit(-1);
     }
-    actions.push_back(action_t(act));
+    if(drill_active())
+    {
+        mine_map->drill_tile(cur_position);
+    }
+    push_action(action_t(act));
+
 }
 
 void cWorker::do_rotate_manip(angle_e alpha)
@@ -134,7 +152,7 @@ void cWorker::do_rotate_manip(angle_e alpha)
         steps++;
         if (steps > 3) steps -= 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(action_t(ACT_TURN_CCW));
+        push_action(action_t(ACT_TURN_CCW));
     }; break;
     case ALPHA_180: {
         int steps = (int)cur_direction;
@@ -142,20 +160,29 @@ void cWorker::do_rotate_manip(angle_e alpha)
         steps++;
         if (steps > 3) steps -= 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(action_t(ACT_TURN_CCW));
-        actions.push_back(action_t(ACT_TURN_CCW));
+        push_action(action_t(ACT_TURN_CCW));
+        push_action(action_t(ACT_TURN_CCW));
     }; break;
     case ALPHA_270: {
         int steps = (int)cur_direction;
         steps--;
         if (steps < 0) steps += 4;
         cur_direction = (directions_e)steps;
-        actions.push_back(action_t(ACT_TURN_CW));
+        push_action(action_t(ACT_TURN_CW));
     }; break;
     default:
         cout << "Unknown angle: " << alpha << endl;
         exit(-1);
     }
+}
+
+bool cWorker::do_activate_drill()
+{
+    if(boost_drill <= 0)
+        return false;
+    push_action(action_t(ACT_ATTACH_DRILL));
+    boost_drill --;
+    boost_drill_timer = DRILL_DURACTION;
 }
 
 string cWorker::dump_log()
@@ -184,7 +211,10 @@ string cWorker::dump_log()
             log += "Q";
             break;
         case ACT_ATTACH_MANIP:
-            log += "B" + act.pos.tostr();;
+            log += "B" + act.pos.tostr();
+            break;
+        case ACT_ATTACH_DRILL:
+            log += "L";
             break;
         default:
             cout << "Unknown action: " << act.act << endl;

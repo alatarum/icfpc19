@@ -94,7 +94,7 @@ do
     in_file=${prob_files[$i-1]}
     out_filename="$(basename "${in_file}" .desc).sol"
     echo "running for file ${in_file} (" $i "/" ${arraylength} ")"
-    $solver -i ${in_file} -o ${output_dir}/${out_filename} -n 10000
+    $solver -i ${in_file} -o ${output_dir}/${out_filename} -n 50000
     if [ $? -ne 0 ]; then
         echo "Runner $start_num: Failed on file ${in_file}!"
     else

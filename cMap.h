@@ -12,6 +12,10 @@
 using namespace std;
 using namespace lemon;
 
+static const int DRILL_DURACTION = 30;
+static const int DRILL_ACTIVATED = -10;
+static const int REGION_NOT_SELECTED = -1;
+
 enum boosters_e {
     BOOST_NONE,
     BOOST_EXT_MANIP,
@@ -155,17 +159,24 @@ public:
     class cRegion * in_region(struct coords target);
     class cRegion * get_region(int reg_id);
     void delete_region(int reg_id);
+
+    void drill_tile(struct coords target);
+
 private:
     struct coords map_size;
     vector<vector<struct map_tile> > tiles;
     vector<class cRegion *> regions;
 
     SmartGraph graph;
+    SmartGraph::NodeMap<struct map_tile *> graph_tiles;
     SubGraph<SmartGraph> dgraph;
     SubGraph<SmartGraph>::ArcMap<int> costMap;
     SmartGraph::NodeMap<bool> graph_filter_node;
     SmartGraph::EdgeMap<bool> graph_filter_edge;
-    SmartGraph::NodeMap<struct map_tile *> graph_tiles;
+    SubGraph<SmartGraph> fgraph;
+    SubGraph<SmartGraph>::ArcMap<int> fcostMap;
+    SmartGraph::NodeMap<bool> graph_full_node;
+    SmartGraph::EdgeMap<bool> graph_full_edge;
 
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
     bool create_edge(coords node, coords to);
