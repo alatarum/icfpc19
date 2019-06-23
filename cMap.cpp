@@ -7,9 +7,9 @@
 static const int WEIGHT_DEFAULT = 1;
 static const int WEIGHT_NOT_LONE_TILE = 25;
 static const int WEIGHT_NOT_STRAIGHT_DIR = 18;
-static const int WEIGHT_NOT_UNWRAPPED_DST = 4;
+static const int WEIGHT_NOT_UNWRAPPED_DST = 6;
 static const int WEIGHT_NOT_UNWRAPPED_MANIP = 6;
-static const int WEIGHT_WALL_MANIP = 8;
+static const int WEIGHT_WALL_MANIP = 10;
 static const int MAX_TARGET_DISTANCE = 15;
 
 using namespace std;
@@ -279,6 +279,7 @@ void cMap::draw(void)
                     case BOOST_DRILL: symbol        = pre+"L"+post; break;
                     case BOOST_X: symbol            = pre+"X"+post; break;
                     case BOOST_RESET: symbol        = pre+"R"+post; break;
+                    case BOOST_CLONE: symbol        = pre+"C"+post; break;
                 default:
                     cout << "Unknown tile type: " << tile.booster << endl;
                     exit(-1);
@@ -540,7 +541,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         if(!dijkstra.reached(n))
             continue;
         bool is_booster = (graph_tiles[n]->booster == BOOST_EXT_MANIP) ||
-//                          (graph_tiles[n]->booster == BOOST_FAST_WHEELS) ||
+                          (graph_tiles[n]->booster == BOOST_FAST_WHEELS) ||
                           (graph_tiles[n]->booster == BOOST_DRILL);
         if((graph_tiles[n]->wrapped == true) && (is_booster == false))
             continue;
@@ -568,8 +569,8 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     }
     struct coords target((max_dist>0)?max_target:min_target);
 
-//    int tgt_dist = (max_dist>0)?max_dist:min_dist;
-//    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
+    int tgt_dist = (max_dist>0)?max_dist:min_dist;
+    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
 
     if(min_dist_boost > 0 && min_dist_boost < 5)
     {

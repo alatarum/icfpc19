@@ -16,6 +16,7 @@ private:
     cWorker *worker;
     struct coords cur_target;
     int cur_region;
+    int target_live;
 };
 
 #endif // CSTRATEGY_H

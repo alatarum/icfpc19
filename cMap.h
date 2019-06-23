@@ -12,6 +12,7 @@
 using namespace std;
 using namespace lemon;
 
+static const int WHEEL_DURACTION = 50;
 static const int DRILL_DURACTION = 30;
 static const int DRILL_ACTIVATED = -10;
 static const int REGION_NOT_SELECTED = -1;
@@ -23,6 +24,7 @@ enum boosters_e {
     BOOST_DRILL,
     BOOST_X,
     BOOST_RESET,
+    BOOST_CLONE,
     BOOST_COUNT
 };
 
@@ -32,7 +34,8 @@ const string booster_name[] = {
     [BOOST_FAST_WHEELS] = "F",
     [BOOST_DRILL] = "L",
     [BOOST_X] = "X",
-    [BOOST_RESET] = "R"
+    [BOOST_RESET] = "R",
+    [BOOST_CLONE] = "C"
 };
 
 struct coords

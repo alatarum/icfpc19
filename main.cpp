@@ -90,6 +90,7 @@ vector<struct coords> parse_coords_boost(string str)
             case 'L': booster = BOOST_DRILL; break;
             case 'X': booster = BOOST_X; break;
             case 'R': booster = BOOST_RESET; break;
+            case 'C': booster = BOOST_CLONE; break;
             default:
                 cout << "parse_coords: can't parse booster: " <<  item << " in " << str << endl;
                 exit(-1);

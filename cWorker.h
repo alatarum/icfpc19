@@ -50,10 +50,13 @@ public:
     void take_booster(boosters_e booster);
     bool drill_active() {return (boost_drill_timer > 0)? true: false;}
     bool have_drill()   {return (boost_drill > 0)? true: false;}
+    bool wheel_active() {return (boost_wheel_timer > 0)? true: false;}
+    bool have_wheel()   {return (boost_wheel > 0)? true: false;}
 
     void do_move(actions_e act);
     void do_rotate_manip(angle_e alpha);
     bool do_activate_drill();
+    bool do_activate_wheel();
 
     angle_e get_rotation_angle(directions_e target_direction);
     string dump_log();
@@ -65,9 +68,10 @@ private:
     vector<action_t> actions;
     vector<struct coords> manipulators;
     vector<struct coords> potential_manipulators;
-    int boost_drill_timer;
-    int boost_wheels;
     int boost_drill;
+    int boost_drill_timer;
+    int boost_wheel;
+    int boost_wheel_timer;
     int boost_x;
     int boost_reset;
 

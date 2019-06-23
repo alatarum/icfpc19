@@ -2,8 +2,8 @@
 
 cWorker::cWorker(struct coords pos) :
     cur_position(pos), cur_direction(DIR_RI),
-    boost_wheels(0), boost_drill(0), boost_x(0), boost_reset(0),
-    boost_drill_timer(0)
+    boost_wheel(0), boost_drill(0), boost_x(0), boost_reset(0),
+    boost_wheel_timer(0), boost_drill_timer(0)
 {
     manipulators.push_back(coords(1, -1));
     manipulators.push_back(coords(1, 0));
@@ -89,7 +89,7 @@ void cWorker::take_booster(boosters_e booster)
         push_action(action_t(ACT_ATTACH_MANIP, rotate_manip((angle_e) cur_direction, coords)));
     }; break;
     case BOOST_FAST_WHEELS:
-        boost_wheels++;
+        boost_wheel++;
         break;
     case BOOST_DRILL:
         boost_drill++;
@@ -107,8 +107,8 @@ void cWorker::push_action(action_t act)
 {
     if(boost_drill_timer > 0) boost_drill_timer--;
     actions.push_back(act);
-//    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
-//    cout << dump_log() << endl;
+    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
+    cout << dump_log() << endl;
 }
 
 

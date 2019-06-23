@@ -7,6 +7,7 @@ cStrategy::cStrategy(cMap *mine_map, cWorker *worker):
     mine_map(mine_map), worker(worker), cur_target(worker->get_pos()), cur_region(REGION_NOT_SELECTED)
 {
     worker->mine_map = mine_map;
+    target_live = 0;
 }
 
 cStrategy::~cStrategy()
@@ -26,6 +27,13 @@ bool cStrategy::step()
         }
     }
 
+    target_live++;
+    if(target_live>30)
+    {
+        target_live = 0;
+        cur_region = REGION_NOT_SELECTED;
+        cur_target = cur_pos;
+    }
 //0. Wrap worker position (required by algorithm).
     mine_map->try_wrap(cur_pos, vector<struct coords> ());
 //1. find target
@@ -46,6 +54,7 @@ bool cStrategy::step()
     struct coords region_size = (region != nullptr)?region->get_rect().size():mine_map->get_size();
     if(!mine_map->is_unwrapped(cur_target))
     {
+        target_live = 0;
         mine_map->reset_edges_cost(cur_region);
         cur_target = mine_map->find_target(cur_pos, cur_region);
         if(cur_target == cur_pos)
