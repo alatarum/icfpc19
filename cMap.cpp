@@ -10,6 +10,7 @@ static const int WEIGHT_NOT_STRAIGHT_DIR = 18;
 static const int WEIGHT_NOT_UNWRAPPED_DST = 4;
 static const int WEIGHT_NOT_UNWRAPPED_MANIP = 6;
 static const int WEIGHT_WALL_MANIP = 8;
+static const int MAX_TARGET_DISTANCE = 15;
 
 using namespace std;
 
@@ -330,6 +331,21 @@ wrappable_e cMap::test_wrappable(struct coords worker, struct coords manip_rel, 
     return WRP_CAN_WRAP;
 }
 
+bool cMap::is_accessible(coords target)
+{
+    if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
+    {
+        return false;
+    }
+    auto &target_tile = tile(target);
+    if (!target_tile.drilled)
+    {
+        return false;
+    }
+    return true;
+}
+
+
 bool cMap::is_unwrapped(struct coords target)
 {
     if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
@@ -377,23 +393,19 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
 
 void cMap::drill_tile(struct coords target)
 {
-cout << "drill_tile: " << target.tostr() << endl;
     if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
     {
         return;
     }
-cout << "drill allowed: " << endl;
     auto &target_tile = tile(target);
     target_tile.wrapped = true;
     target_tile.drilled = true;
     target_tile.booster = BOOST_NONE;
-cout << "commiting: " << endl;
     for(auto &region: regions)
     {
         region->commit(graph, graph_tiles);
     }
     graph_filter_node[graph.nodeFromId(target_tile.node_id)] = true;
-cout << "Done: " << target_tile.node_id << endl;
 }
 
 bool cMap::create_edge(coords node, coords to)
@@ -542,7 +554,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         if(region_id != REGION_NOT_SELECTED)
         {
             struct coords tmp_sz(rect_t(worker, graph_tiles[n]->position).size());
-            if(max_dist < dist && dist < 15 && ((tmp_sz.x<2) || (tmp_sz.y<2)))
+            if(max_dist < dist && dist < MAX_TARGET_DISTANCE && ((tmp_sz.x<3) || (tmp_sz.y<3)))
             {
                 max_dist = dist;
                 max_target = graph_tiles[n]->position;

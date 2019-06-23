@@ -51,7 +51,7 @@ public:
     bool drill_active() {return (boost_drill_timer > 0)? true: false;}
     bool have_drill()   {return (boost_drill > 0)? true: false;}
 
-    void do_action(actions_e act);
+    void do_move(actions_e act);
     void do_rotate_manip(angle_e alpha);
     bool do_activate_drill();
 

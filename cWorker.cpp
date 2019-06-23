@@ -92,7 +92,6 @@ void cWorker::take_booster(boosters_e booster)
         boost_wheels++;
         break;
     case BOOST_DRILL:
-cout << "drill found" << endl;
         boost_drill++;
         break;
     case BOOST_X:
@@ -113,21 +112,22 @@ void cWorker::push_action(action_t act)
 }
 
 
-void cWorker::do_action(actions_e act)
+void cWorker::do_move(actions_e act)
 {
+    coords target(cur_position);
     switch(act)
     {
     case ACT_MOVE_RI:
-        cur_position.x++;
+        target.x++;
         break;
     case ACT_MOVE_DN:
-        cur_position.y--;
+        target.y--;
         break;
     case ACT_MOVE_LE:
-        cur_position.x--;
+        target.x--;
         break;
     case ACT_MOVE_UP:
-        cur_position.y++;
+        target.y++;
         break;
     default:
         cout << "Unknown action: " << act << endl;
@@ -135,10 +135,13 @@ void cWorker::do_action(actions_e act)
     }
     if(drill_active())
     {
-        mine_map->drill_tile(cur_position);
+        mine_map->drill_tile(target);
+    } else {
+        if(!mine_map->is_accessible(target))
+            return;
     }
+    cur_position = target;
     push_action(action_t(act));
-
 }
 
 void cWorker::do_rotate_manip(angle_e alpha)

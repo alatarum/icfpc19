@@ -159,7 +159,7 @@ public:
     class cRegion * in_region(struct coords target);
     class cRegion * get_region(int reg_id);
     void delete_region(int reg_id);
-
+    bool is_accessible(coords target);
     void drill_tile(struct coords target);
 
 private:

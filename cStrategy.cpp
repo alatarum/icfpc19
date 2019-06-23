@@ -16,13 +16,16 @@ cStrategy::~cStrategy()
 
 bool cStrategy::step()
 {
+    struct coords cur_pos(worker->get_pos());
     if(cur_region == DRILL_ACTIVATED)
     {
         if(!worker->drill_active())
+        {
             cur_region = REGION_NOT_SELECTED;
+            cur_target = cur_pos;
+        }
     }
 
-    struct coords cur_pos(worker->get_pos());
 //0. Wrap worker position (required by algorithm).
     mine_map->try_wrap(cur_pos, vector<struct coords> ());
 //1. find target
@@ -85,18 +88,17 @@ bool cStrategy::step()
         }
     }
 
-//    if((worker->have_drill()) && (!worker->drill_active()))
-//    {
-//        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(DIR_RI), DRILL_ACTIVATED);
-//        int cost = mine_map->estimate_route(cur_pos, cur_target, DRILL_ACTIVATED);
-//        cout << "cost with drill " << cost << " cost without drill " << min_cost << endl;
-//        if(min_cost - cost > DRILL_THRESHOLD)
-//        {
-//            manip_dir = worker->get_dir();
-//            if(worker->do_activate_drill())
-//                cur_region = DRILL_ACTIVATED;
-//        }
-//    }
+    if((worker->have_drill()) && (!worker->drill_active()))
+    {
+        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(DIR_RI), DRILL_ACTIVATED);
+        int cost = mine_map->estimate_route(cur_pos, cur_target, DRILL_ACTIVATED);
+        if(min_cost - cost > DRILL_THRESHOLD)
+        {
+            manip_dir = worker->get_dir();
+            if(worker->do_activate_drill())
+                cur_region = DRILL_ACTIVATED;
+        }
+    }
 
     mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region);
     directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);
@@ -127,7 +129,7 @@ bool cStrategy::step()
         cur_region = -1;
         return true;
     }
-    worker->do_action(action);
+    worker->do_move(action);
 //5. check for booster
     boosters_e booster = mine_map->pick_booster(worker->get_pos());
     {
