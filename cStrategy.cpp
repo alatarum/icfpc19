@@ -78,7 +78,7 @@ bool cStrategy::step(bool verb)
 
 //2. plan route
     int min_cost = -1;
-    directions_e manip_dir;
+    directions_e manip_dir = worker->get_dir();
     for(int tmp_dir = DIR_RI; tmp_dir <= DIR_DN; tmp_dir++)
     {
         mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir), cur_region);
@@ -122,7 +122,7 @@ bool cStrategy::step(bool verb)
     directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);
 
     if(verb)
-        mine_map->draw(cur_pos, worker->get_manip_rel_pos(manip_dir), cur_target);
+        mine_map->draw(cur_pos, worker->get_manip_rel_pos(), cur_target);
 
 //3. move worker
     worker->do_rotate_manip(worker->get_rotation_angle(manip_dir));

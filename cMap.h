@@ -136,10 +136,10 @@ private:
     int id;
     rect_t rect;
 
-    SubGraph<SmartGraph> dgraph;
-    SubGraph<SmartGraph>::ArcMap<int> costMap;
     SmartGraph::NodeMap<bool> graph_filter_node;
     SmartGraph::EdgeMap<bool> graph_filter_edge;
+    SubGraph<SmartGraph> dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> costMap;
 };
 
 class cMap
@@ -172,14 +172,16 @@ private:
 
     SmartGraph graph;
     SmartGraph::NodeMap<struct map_tile *> graph_tiles;
-    SubGraph<SmartGraph> dgraph;
-    SubGraph<SmartGraph>::ArcMap<int> costMap;
+
     SmartGraph::NodeMap<bool> graph_filter_node;
     SmartGraph::EdgeMap<bool> graph_filter_edge;
-    SubGraph<SmartGraph> fgraph;
-    SubGraph<SmartGraph>::ArcMap<int> fcostMap;
+    SubGraph<SmartGraph> dgraph;
+    SubGraph<SmartGraph>::ArcMap<int> costMap;
+
     SmartGraph::NodeMap<bool> graph_full_node;
     SmartGraph::EdgeMap<bool> graph_full_edge;
+    SubGraph<SmartGraph> fgraph;
+    SubGraph<SmartGraph>::ArcMap<int> fcostMap;
 
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
     bool create_edge(coords node, coords to);

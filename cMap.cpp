@@ -155,7 +155,8 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
     }
 }
 
-cRegion::cRegion(struct coords target, SmartGraph &graph): rect(coords(target.x-1,target.y-1), coords(target.x+2,target.y+2)),
+cRegion::cRegion(struct coords target, SmartGraph &graph):
+        id(0), rect(coords(target.x-1,target.y-1), coords(target.x+2,target.y+2)),
         graph_filter_node(graph, true), graph_filter_edge(graph, true),
         dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1)
 {
@@ -499,6 +500,12 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int
             case WRP_CAN_NOT_WRAP:
                 (*cm)[arc] += WEIGHT_NOT_UNWRAPPED_MANIP;
                 break;
+            case WRP_CAN_WRAP:
+                (*cm)[arc] += 0;
+                break;
+            default:
+                cout << "Unexpected test_wrappable result: " << wrp << endl;
+                exit(-1);
             }
         }
 
@@ -605,7 +612,6 @@ struct coords cMap::find_target(struct coords worker, int region_id)
 
 int cMap::estimate_route(struct coords worker, struct coords target, int region_id)
 {
-bool verb = true;
     SubGraph<SmartGraph> *sg = &dgraph;
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)

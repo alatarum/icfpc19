@@ -248,6 +248,8 @@ int main(int argc, char *argv[])
             cout << "step "  << steps<< endl;
         }
     }
+    if(verbose)
+        mine_map->draw(worker->get_pos(), worker->get_manip_rel_pos(), worker->get_pos());
 
     string log = worker->dump_log();
 
