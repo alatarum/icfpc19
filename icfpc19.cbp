@@ -3,37 +3,36 @@
 	<FileVersion major="1" minor="6" />
 	<Project>
 		<Option title="icfpc19" />
+		<Option makefile_is_custom="1" />
+		<Option execution_dir="build_cb" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
 		<Build>
-			<Target title="Debug">
-				<Option output="bin/Debug/icfpc19" prefix_auto="1" extension_auto="1" />
+			<Target title="all">
+				<Option output="build_cb/icfpc19" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
+				<Option parameters="-i ../problem/part1/prob-003.desc -n 1000 -v" />
 				<Compiler>
 					<Add option="-g" />
 					<Add directory="./" />
 				</Compiler>
-			</Target>
-			<Target title="Release">
-				<Option output="bin/Release/icfpc19" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/Release/" />
-				<Option type="1" />
-				<Option compiler="gcc" />
-				<Compiler>
-					<Add option="-O2" />
-					<Add directory="./" />
-				</Compiler>
-				<Linker>
-					<Add option="-s" />
-				</Linker>
+				<MakeCommands>
+					<Build command="$make -f $makefile $target" />
+					<CompileFile command="$make -f $makefile $file" />
+					<Clean command="$make -f $makefile clean" />
+					<DistClean command="$make -f $makefile distclean$target" />
+					<AskRebuildNeeded command="$make -q -f $makefile $target" />
+					<SilentBuild command="$make -f $makefile $target &gt; $(CMD_NULL)" />
+				</MakeCommands>
 			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Unit filename="CMakeLists.txt" />
 		<Unit filename="cMap.cpp" />
 		<Unit filename="cMap.h" />
 		<Unit filename="cStrategy.cpp" />
