@@ -67,10 +67,6 @@ if [ -z "$output_dir" ]; then
         echo "Output directory not specified!"
         exit
 fi
-if [ ! -d "$output_dir" ]; then
-        echo "Output directory not exists!"
-        exit
-fi
 
 for (( i=1; i<$threads+1; i++));
 do

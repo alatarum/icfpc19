@@ -12,8 +12,9 @@ usage()
 
 input_dir=
 output_dir=
-solver=./icfpc19
+solver=./build/icfpc19
 
+steps_limit=50000
 threads=1
 start_num=1
 
@@ -78,6 +79,15 @@ if [ -z "$output_dir" ]; then
         echo "Output directory not specified!"
         exit
 fi
+
+mkdir -p $output_dir/c
+mkdir -p $output_dir/m
+mkdir -p $output_dir/w
+mkdir -p $output_dir/d
+mkdir -p $output_dir/mw
+mkdir -p $output_dir/md
+mkdir -p $output_dir/wd
+mkdir -p $output_dir/mwd
 if [ ! -d "$output_dir" ]; then
         echo "Output directory not exists!"
         exit
@@ -94,12 +104,19 @@ do
     in_file=${prob_files[$i-1]}
     out_filename="$(basename "${in_file}" .desc).sol"
     echo "running for file ${in_file} (" $i "/" ${arraylength} ")"
-    $solver -i ${in_file} -o ${output_dir}/${out_filename} -n 50000
-    if [ $? -ne 0 ]; then
-        echo "Runner $start_num: Failed on file ${in_file}!"
-    else
-        echo "Runner $start_num: Ok for file ${in_file}"
-    fi
+    $solver -i ${in_file} -o ${output_dir}/c/${out_filename} -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/m/${out_filename} -m -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/w/${out_filename} -w -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/d/${out_filename} -d -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/mw/${out_filename} -mw -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/md/${out_filename} -md -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/wd/${out_filename} -wd -n ${steps_limit}
+    $solver -i ${in_file} -o ${output_dir}/mwd/${out_filename} -mwd -n ${steps_limit}
+#    if [ $? -ne 0 ]; then
+#        echo "Runner $start_num: Failed on file ${in_file}!"
+#    else
+#        echo "Runner $start_num: Ok for file ${in_file}"
+#    fi
 done
 
 echo "Runner $start_num: Done"

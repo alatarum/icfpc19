@@ -2,7 +2,7 @@
 
 cWorker::cWorker(struct coords pos) :
     cur_position(pos), cur_direction(DIR_RI),
-    boost_drill(0), boost_drill_timer(0),
+    boost_manip(0), boost_drill(0), boost_drill_timer(0),
     boost_wheel(0), boost_wheel_timer(0), boost_x(0), boost_reset(0)
 {
     manipulators.push_back(coords(1, -1));
@@ -78,16 +78,9 @@ void cWorker::take_booster(boosters_e booster)
 {
     switch(booster)
     {
-    case BOOST_EXT_MANIP: {
-        auto coords = potential_manipulators.back();
-        potential_manipulators.pop_back();
-        if(!try_attach_manip(coords))
-        {
-            cout << "Can't attach manip: " << coords.tostr() << endl;
-            return;
-        }
-        push_action(action_t(ACT_ATTACH_MANIP, rotate_manip((angle_e) cur_direction, coords)));
-    }; break;
+    case BOOST_EXT_MANIP:
+        boost_manip++;
+        break;
     case BOOST_FAST_WHEELS:
         boost_wheel++;
         break;
@@ -120,6 +113,7 @@ void cWorker::do_move(actions_e act)
 {
     coords target(cur_position);
     coords delta(0, 0);
+    boosters_e booster;
     switch(act)
     {
     case ACT_MOVE_RI:
@@ -145,6 +139,10 @@ void cWorker::do_move(actions_e act)
             return;
     }
     cur_position = target;
+// check for booster
+    if((booster = mine_map->pick_booster(cur_position)) != BOOST_NONE)
+        take_booster(booster);
+
 
     if(wheel_active())
     {
@@ -157,6 +155,9 @@ void cWorker::do_move(actions_e act)
                     break; // can't move forward
             }
             cur_position = target;
+// check for booster
+            if((booster = mine_map->pick_booster(cur_position)) != BOOST_NONE)
+                take_booster(booster);
         } while(0);
     }
     push_action(action_t(act));
@@ -197,6 +198,21 @@ void cWorker::do_rotate_manip(angle_e alpha)
     }
 }
 
+bool cWorker::do_activate_manip()
+{
+    if(boost_manip <= 0)
+        return false;
+    auto coords = potential_manipulators.back();
+    potential_manipulators.pop_back();
+    if(!try_attach_manip(coords))
+    {
+        cout << "Can't attach manip: " << coords.tostr() << endl;
+        return false;
+    }
+    push_action(action_t(ACT_ATTACH_MANIP, rotate_manip((angle_e) cur_direction, coords)));
+    boost_manip --;
+    return true;
+}
 bool cWorker::do_activate_drill()
 {
     if(boost_drill <= 0)

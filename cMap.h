@@ -14,7 +14,6 @@ using namespace lemon;
 
 static const int WHEEL_DURACTION = 50;
 static const int DRILL_DURACTION = 30;
-static const int DRILL_ACTIVATED = -10;
 static const int REGION_NOT_SELECTED = -1;
 
 enum boosters_e {
@@ -27,6 +26,9 @@ enum boosters_e {
     BOOST_CLONE,
     BOOST_COUNT
 };
+
+static const int BOOSTF_FAST_WHEELS = 0x01;
+static const int BOOSTF_DRILL = 0x02;
 
 const string booster_name[] = {
     [BOOST_NONE] = "NONE",
@@ -150,11 +152,11 @@ public:
     void place_boosters(vector<struct coords> boosters_coords);
     void draw(struct coords worker, vector<struct coords> manips_rel, struct coords target);
     void try_wrap(struct coords worker, vector<struct coords> manips_rel);
-    struct coords find_target(struct coords worker, int region_id);
-    int estimate_route(struct coords worker, struct coords target, int region_id);
-    directions_e get_direction(struct coords worker, struct coords target, int region_id);
-    void reset_edges_cost(int region_id);
-    void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel, int region_id);
+    struct coords find_target(struct coords worker, int region_id, int boosters);
+    int estimate_route(struct coords worker, struct coords target, int region_id, int boosters);
+    directions_e get_direction(struct coords worker, struct coords target, int region_id, int boosters);
+    void reset_edges_cost(int region_id, int boosters);
+    void update_edges_cost(bool is_vertical, vector<struct coords> manips_rel, int region_id, int boosters);
     bool is_unwrapped(struct coords target);
     boosters_e pick_booster(struct coords target);
 
@@ -166,6 +168,7 @@ public:
     bool drill_tile(struct coords target);
 
     void set_draw_style(bool use_colors) {draw_use_colors = use_colors;}
+    void set_verbose(bool verb) {verbose = verb;}
 private:
     struct coords map_size;
     vector<vector<struct map_tile> > tiles;
@@ -189,6 +192,7 @@ private:
     map_tile& tile(struct coords loc) {return tiles[loc.x][loc.y];}
 
     bool draw_use_colors;
+    bool verbose;
 };
 
 #endif // CMAP_H

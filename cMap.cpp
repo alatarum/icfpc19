@@ -26,7 +26,7 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
     dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1),
     graph_full_node(graph, false), graph_full_edge(graph, true),
     fgraph(graph, graph_full_node, graph_full_edge), fcostMap(fgraph, 1),
-    draw_use_colors(false)
+    draw_use_colors(false), verbose(false)
 {
 //1. determine map size and extract vertical lines for borders
     vector<struct vertical_line> lines;
@@ -450,13 +450,15 @@ bool cMap::create_edge(coords node, coords to)
     return result;
 }
 
-void cMap::reset_edges_cost(int region_id)
+void cMap::reset_edges_cost(int region_id, int boosters)
 {
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)
     {
         cm = get_region(region_id)->get_graphcostmap();
-    } else if (region_id == DRILL_ACTIVATED) {
+    }
+    if (boosters & BOOSTF_DRILL)
+    {
         cm = &fcostMap;
     }
     for (SmartGraph::ArcIt arc(graph); arc != INVALID; ++arc)
@@ -466,13 +468,15 @@ void cMap::reset_edges_cost(int region_id)
     }
 }
 
-void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int region_id)
+void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int region_id, int boosters)
 {
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)
     {
         cm = get_region(region_id)->get_graphcostmap();
-    } else if (region_id == DRILL_ACTIVATED) {
+    }
+    if (boosters & BOOSTF_DRILL)
+    {
         cm = &fcostMap;
     }
     for (SubGraph<SmartGraph>::ArcIt arc(dgraph); arc != INVALID; ++arc)
@@ -533,7 +537,7 @@ void cMap::update_edges_cost(bool is_vertical, vector<struct coords> manips, int
     }
 }
 
-struct coords cMap::find_target(struct coords worker, int region_id)
+struct coords cMap::find_target(struct coords worker, int region_id, int boosters)
 {
 //looking for far point in region
     struct coords max_target(worker);
@@ -555,12 +559,11 @@ struct coords cMap::find_target(struct coords worker, int region_id)
             cm = region->get_graphcostmap();
         }
         rect = region->get_rect();
-    } else if (region_id == DRILL_ACTIVATED) {
+    }
+    if (boosters & BOOSTF_DRILL)
+    {
         sg = &fgraph;
         cm = &fcostMap;
-        auto region = in_region(worker);
-        if(region != nullptr)
-            rect = region->get_rect();
     }
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
@@ -609,16 +612,16 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     struct coords target((max_dist>0)?max_target:min_target);
     int tgt_dist = (max_dist>0)?max_dist:min_dist;
 
-    if(min_dist_boost > 0 && min_dist_boost < 5)
+    if((!(boosters & BOOSTF_FAST_WHEELS)) && ((min_dist_boost > 0) && (min_dist_boost < 5)))
     {
         target = min_booster;
         tgt_dist = min_dist_boost;
     }
-    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
+    if(verbose) std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
     return target;
 }
 
-int cMap::estimate_route(struct coords worker, struct coords target, int region_id)
+int cMap::estimate_route(struct coords worker, struct coords target, int region_id, int boosters)
 {
     SubGraph<SmartGraph> *sg = &dgraph;
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
@@ -630,10 +633,13 @@ int cMap::estimate_route(struct coords worker, struct coords target, int region_
             sg = region->get_subgraph();
             cm = region->get_graphcostmap();
         }
-    } else if (region_id == DRILL_ACTIVATED) {
+    }
+    if (boosters & BOOSTF_DRILL)
+    {
         sg = &fgraph;
         cm = &fcostMap;
     }
+
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
     auto &worker_tile = tile(worker);
@@ -643,7 +649,7 @@ int cMap::estimate_route(struct coords worker, struct coords target, int region_
         exit(-1);
     }
     auto &target_tile = tile(target);
-    if (!target_tile.drilled && (region_id != DRILL_ACTIVATED))
+    if (!target_tile.drilled && !(boosters & BOOSTF_DRILL))
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
         return -1;
@@ -658,7 +664,7 @@ int cMap::estimate_route(struct coords worker, struct coords target, int region_
     return dijkstra.dist(to);
 }
 
-directions_e cMap::get_direction(struct coords worker, struct coords target, int region_id)
+directions_e cMap::get_direction(struct coords worker, struct coords target, int region_id, int boosters)
 {
     SubGraph<SmartGraph> *sg = &dgraph;
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
@@ -670,10 +676,13 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
             sg = region->get_subgraph();
             cm = region->get_graphcostmap();
         }
-    } else if (region_id == DRILL_ACTIVATED) {
+    }
+    if (boosters & BOOSTF_DRILL)
+    {
         sg = &fgraph;
         cm = &fcostMap;
     }
+
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
     struct coords next(worker);
 
@@ -684,7 +693,7 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
         exit(-1);
     }
     auto &target_tile = tile(target);
-    if (!target_tile.drilled && (region_id != DRILL_ACTIVATED))
+    if (!target_tile.drilled && !(boosters & BOOSTF_DRILL))
     {
         cout << "Worker can't get here: " << target.tostr() << endl;
         return DIR_COUNT;

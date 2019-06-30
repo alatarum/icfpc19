@@ -48,6 +48,7 @@ public:
     directions_e get_dir() {return cur_direction;}
     vector<struct coords> get_manip_rel_pos(directions_e direction = DIR_COUNT);
     void take_booster(boosters_e booster);
+    bool have_manip()   {return (boost_manip > 0)? true: false;}
     bool drill_active() {return (boost_drill_timer > 0)? true: false;}
     bool have_drill()   {return (boost_drill > 0)? true: false;}
     bool wheel_active() {return (boost_wheel_timer > 0)? true: false;}
@@ -55,6 +56,7 @@ public:
 
     void do_move(actions_e act);
     void do_rotate_manip(angle_e alpha);
+    bool do_activate_manip();
     bool do_activate_drill();
     bool do_activate_wheel();
 
@@ -68,6 +70,7 @@ private:
     vector<action_t> actions;
     vector<struct coords> manipulators;
     vector<struct coords> potential_manipulators;
+    int boost_manip;
     int boost_drill;
     int boost_drill_timer;
     int boost_wheel;

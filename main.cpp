@@ -138,8 +138,11 @@ int main(int argc, char *argv[])
     char *solution_file = NULL;
     modes_e mode = MODE_DEFAULT;
     int max_steps = 1000;
+    bool use_manip = false;
+    bool use_drill = false;
+    bool use_wheel = false;
     bool use_colors = false;
-    while ((opt = getopt(argc, argv, "hvi:o:n:pc")) != -1)
+    while ((opt = getopt(argc, argv, "hvi:o:n:pmdwc")) != -1)
     {
         switch (opt) {
         case 'i':
@@ -153,6 +156,15 @@ int main(int argc, char *argv[])
             break;
         case 'p':
             mode = MODE_PARSE_ONLY;
+            break;
+        case 'm':
+            use_manip = true;
+            break;
+        case 'd':
+            use_drill = true;
+            break;
+        case 'w':
+            use_wheel = true;
             break;
         case 'c':
             use_colors = true;
@@ -232,14 +244,21 @@ int main(int argc, char *argv[])
     auto mine_map = new cMap(map_border_coords, obstacles_list);
     mine_map->place_boosters(boosters_coords);
     mine_map->try_wrap(init_location, vector<struct coords> ());
-    mine_map->set_draw_style(use_colors);
-    if(verbose)
-        mine_map->draw(init_location, vector<struct coords> (), init_location);
 
     auto worker = new cWorker(init_location);
     auto strategy = new cStrategy(mine_map, worker);
+    strategy->set_use_boosters(use_manip, use_drill, use_wheel);
+
+    if(verbose)
+    {
+        mine_map->set_draw_style(use_colors);
+        mine_map->set_verbose(true);
+        mine_map->draw(init_location, vector<struct coords> (), init_location);
+        strategy->set_verbose(true);
+    }
+
     int steps = 0;
-    while(strategy->step(verbose))
+    while(strategy->step())
     {
         steps++;
 

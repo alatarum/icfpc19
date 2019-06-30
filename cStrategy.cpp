@@ -4,10 +4,11 @@ static const int ROTATION_COST = 5;
 static const int DRILL_THRESHOLD = 15;
 
 cStrategy::cStrategy(cMap *mine_map, cWorker *worker):
-    mine_map(mine_map), worker(worker), cur_target(worker->get_pos()), cur_region(REGION_NOT_SELECTED)
+    mine_map(mine_map), worker(worker), cur_target(worker->get_pos()), cur_region(REGION_NOT_SELECTED),
+    target_live(0), use_manip(true), use_drill(true), use_wheel(true), verbose(false)
+
 {
     worker->mine_map = mine_map;
-    target_live = 0;
 }
 
 cStrategy::~cStrategy()
@@ -15,15 +16,22 @@ cStrategy::~cStrategy()
     //dtor
 }
 
-bool cStrategy::step(bool verb)
+bool cStrategy::step()
 {
     struct coords cur_pos(worker->get_pos());
-    if((cur_region == DRILL_ACTIVATED)&&(!worker->drill_active()))
+    int boosters = 0;
+    static bool was_drill = false;
+    if(worker->drill_active()) boosters |= BOOSTF_DRILL;
+    if(worker->wheel_active()) boosters |= BOOSTF_FAST_WHEELS;
+
+    if((was_drill) && (!(boosters & BOOSTF_DRILL)))
     {
         cur_region = REGION_NOT_SELECTED;
         cur_target = cur_pos;
     }
-    if(worker->wheel_active())
+    was_drill = boosters & BOOSTF_DRILL;
+
+    if(boosters & BOOSTF_FAST_WHEELS)
     {
         int dx = cur_pos.x-cur_target.x;
         int dy = cur_pos.y-cur_target.y;
@@ -34,7 +42,7 @@ bool cStrategy::step(bool verb)
     }
 
     target_live++;
-    if((cur_region != DRILL_ACTIVATED) && (target_live>50))
+    if(target_live > 50)
     {
         target_live = 0;
         cur_region = REGION_NOT_SELECTED;
@@ -43,25 +51,22 @@ bool cStrategy::step(bool verb)
 
 //1. find target
     class cRegion *region = nullptr;
-    if(cur_region >= 0)
-    {
-        region = mine_map->get_region(cur_region);
-        if(region == nullptr)
+    region = mine_map->get_region(cur_region);
+    if(region == nullptr)
         cur_region = REGION_NOT_SELECTED;
-    }
     if((cur_region == REGION_NOT_SELECTED))
     {
         region = mine_map->in_region(cur_pos);
         if(region != nullptr)
             cur_region = region->get_id();
     }
-
     struct coords region_size = (region != nullptr)?region->get_rect().size():mine_map->get_size();
+
     if(!mine_map->is_unwrapped(cur_target))
     {
         target_live = 0;
-        mine_map->reset_edges_cost(cur_region);
-        cur_target = mine_map->find_target(cur_pos, cur_region);
+        mine_map->reset_edges_cost(cur_region, boosters);
+        cur_target = mine_map->find_target(cur_pos, cur_region, boosters);
         if(cur_target == cur_pos)
         {
             if(cur_region != REGION_NOT_SELECTED)
@@ -81,8 +86,8 @@ bool cStrategy::step(bool verb)
     directions_e manip_dir = worker->get_dir();
     for(int tmp_dir = DIR_RI; tmp_dir <= DIR_DN; tmp_dir++)
     {
-        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir), cur_region);
-        int cost = mine_map->estimate_route(cur_pos, cur_target, cur_region);
+        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir), cur_region, boosters);
+        int cost = mine_map->estimate_route(cur_pos, cur_target, cur_region, boosters);
         auto angle = worker->get_rotation_angle((directions_e)tmp_dir);
         int rotation_cost = 0;
         switch(angle)
@@ -104,24 +109,37 @@ bool cStrategy::step(bool verb)
         }
     }
 
-    if((worker->have_drill()) && (!worker->drill_active()))
+    if(use_drill)
     {
-        mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(DIR_RI), DRILL_ACTIVATED);
-        int cost = mine_map->estimate_route(cur_pos, cur_target, DRILL_ACTIVATED);
-        if(min_cost - cost > DRILL_THRESHOLD)
+        if((worker->have_drill()) && (!(boosters & BOOSTF_DRILL)))
         {
-            manip_dir = worker->get_dir();
-            if(worker->do_activate_drill())
-                cur_region = DRILL_ACTIVATED;
+            mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(DIR_RI), cur_region, boosters | BOOSTF_DRILL);
+            int cost = mine_map->estimate_route(cur_pos, cur_target, cur_region, boosters | BOOSTF_DRILL);
+            if(min_cost - cost > DRILL_THRESHOLD)
+            {
+                manip_dir = worker->get_dir();
+                worker->do_activate_drill();
+            }
         }
     }
-    if((worker->have_wheel()) && (!worker->wheel_active()))
-        worker->do_activate_wheel();
+    if(use_wheel)
+    {
+        if((worker->have_wheel()) && (!worker->wheel_active()))
+            worker->do_activate_wheel();
+    }
+    if(use_manip)
+    {
+        if(worker->have_manip())
+            worker->do_activate_manip();
+    }
+    boosters = 0;
+    if(worker->drill_active()) boosters |= BOOSTF_DRILL;
+    if(worker->wheel_active()) boosters |= BOOSTF_FAST_WHEELS;
 
-    mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region);
-    directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);
+    mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region, boosters);
+    directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region, boosters);
 
-    if(verb)
+    if(verbose)
         mine_map->draw(cur_pos, worker->get_manip_rel_pos(), cur_target);
 
 //3. move worker
@@ -150,13 +168,5 @@ bool cStrategy::step(bool verb)
     }
     worker->do_move(action);
     cur_pos = worker->get_pos();
-//5. check for booster
-    boosters_e booster = mine_map->pick_booster(cur_pos);
-    {
-        if(booster != BOOST_NONE)
-        {
-            worker->take_booster(booster);
-        }
-    }
     return true;
 }
