@@ -2,8 +2,8 @@
 
 cWorker::cWorker(struct coords pos) :
     cur_position(pos), cur_direction(DIR_RI),
-    boost_wheel(0), boost_drill(0), boost_x(0), boost_reset(0),
-    boost_wheel_timer(0), boost_drill_timer(0)
+    boost_drill(0), boost_drill_timer(0),
+    boost_wheel(0), boost_wheel_timer(0), boost_x(0), boost_reset(0)
 {
     manipulators.push_back(coords(1, -1));
     manipulators.push_back(coords(1, 0));
@@ -100,6 +100,8 @@ void cWorker::take_booster(boosters_e booster)
     case BOOST_RESET:
         boost_reset++;
         break;
+    default:
+        break;
     }
 }
 
@@ -107,6 +109,7 @@ void cWorker::push_action(action_t act)
 {
     if(boost_drill_timer > 0) boost_drill_timer--;
     if(boost_wheel_timer > 0) boost_wheel_timer--;
+    mine_map->try_wrap(cur_position, get_manip_rel_pos());
     actions.push_back(act);
 //    cout << "Do action: " << act.act << " at " << cur_position.tostr() <<" drill time: " << boost_drill_timer << endl;
 //    cout << dump_log() << endl;
@@ -116,62 +119,45 @@ void cWorker::push_action(action_t act)
 void cWorker::do_move(actions_e act)
 {
     coords target(cur_position);
+    coords delta(0, 0);
     switch(act)
     {
     case ACT_MOVE_RI:
-        target.x++;
-        break;
-    case ACT_MOVE_DN:
-        target.y--;
-        break;
-    case ACT_MOVE_LE:
-        target.x--;
+        delta.x++;
         break;
     case ACT_MOVE_UP:
-        target.y++;
+        delta.y++;
+        break;
+    case ACT_MOVE_LE:
+        delta.x--;
+        break;
+    case ACT_MOVE_DN:
+        delta.y--;
         break;
     default:
-        cout << "Unknown action: " << act << endl;
+        cout << "Unknown move direction: " << act << endl;
         exit(-1);
     }
-    if(drill_active())
+    target = target + delta;
+    if(!mine_map->is_accessible(target))
     {
-        mine_map->drill_tile(target);
-    } else {
-        if(!mine_map->is_accessible(target))
+        if(!(drill_active() && mine_map->drill_tile(target)))
             return;
     }
     cur_position = target;
 
-
     if(wheel_active())
     {
-        switch(act)
-        {
-        case ACT_MOVE_RI:
-            target.x++;
-            break;
-        case ACT_MOVE_DN:
-            target.y--;
-            break;
-        case ACT_MOVE_LE:
-            target.x--;
-            break;
-        case ACT_MOVE_UP:
-            target.y++;
-            break;
-        default:
-            cout << "Unknown action: " << act << endl;
-            exit(-1);
-        }
-        if(drill_active())
-        {
-            mine_map->drill_tile(target);
+        do {
+            mine_map->try_wrap(cur_position, get_manip_rel_pos()); //additional wrap
+            target = target + delta;
+            if(!mine_map->is_accessible(target))
+            {
+                if(!(drill_active() && mine_map->drill_tile(target)))
+                    break; // can't move forward
+            }
             cur_position = target;
-        } else {
-            if(mine_map->is_accessible(target))
-                cur_position = target;
-        }
+        } while(0);
     }
     push_action(action_t(act));
 }
@@ -257,6 +243,9 @@ string cWorker::dump_log()
             break;
         case ACT_ATTACH_MANIP:
             log += "B" + act.pos.tostr();
+            break;
+        case ACT_ATTACH_FAST:
+            log += "F";
             break;
         case ACT_ATTACH_DRILL:
             log += "L";

@@ -413,12 +413,10 @@ void cMap::try_wrap(struct coords worker, vector<struct coords> manips_rel)
     }
 }
 
-void cMap::drill_tile(struct coords target)
+bool cMap::drill_tile(struct coords target)
 {
     if (!rect_t(coords(0,0), coords(map_size)).in_rect(target))
-    {
-        return;
-    }
+        return false;
     auto &target_tile = tile(target);
     target_tile.wrapped = true;
     target_tile.drilled = true;
@@ -428,6 +426,7 @@ void cMap::drill_tile(struct coords target)
         region->commit(graph, graph_tiles);
     }
     graph_filter_node[graph.nodeFromId(target_tile.node_id)] = true;
+    return true;
 }
 
 bool cMap::create_edge(coords node, coords to)

@@ -18,31 +18,29 @@ cStrategy::~cStrategy()
 bool cStrategy::step(bool verb)
 {
     struct coords cur_pos(worker->get_pos());
-    if(cur_region == DRILL_ACTIVATED)
+    if((cur_region == DRILL_ACTIVATED)&&(!worker->drill_active()))
     {
-        if(!worker->drill_active())
-        {
-            cur_region = REGION_NOT_SELECTED;
-            cur_target = cur_pos;
-        }
+        cur_region = REGION_NOT_SELECTED;
+        cur_target = cur_pos;
     }
-    if(!worker->wheel_active())
+    if(worker->wheel_active())
     {
         int dx = cur_pos.x-cur_target.x;
         int dy = cur_pos.y-cur_target.y;
-        if((dx*dx + dy*dy) < 4)
+        if(((dx*dx + dy*dy) < 4) && !(cur_pos == cur_target))
+        {
             cur_target = cur_pos;
+        }
     }
 
     target_live++;
-    if(target_live>30)
+    if((cur_region != DRILL_ACTIVATED) && (target_live>50))
     {
         target_live = 0;
         cur_region = REGION_NOT_SELECTED;
         cur_target = cur_pos;
     }
-//0. Wrap worker position (required by algorithm).
-    mine_map->try_wrap(cur_pos, vector<struct coords> ());
+
 //1. find target
     class cRegion *region = nullptr;
     if(cur_region >= 0)
@@ -122,13 +120,11 @@ bool cStrategy::step(bool verb)
 
     mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos(manip_dir), cur_region);
     directions_e move_dir = mine_map->get_direction(cur_pos, cur_target, cur_region);
-//3. wrap tiles
-    mine_map->try_wrap(cur_pos, worker->get_manip_rel_pos());
 
     if(verb)
         mine_map->draw(cur_pos, worker->get_manip_rel_pos(manip_dir), cur_target);
 
-//4. move worker
+//3. move worker
     worker->do_rotate_manip(worker->get_rotation_angle(manip_dir));
 
     actions_e action;

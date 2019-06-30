@@ -227,6 +227,7 @@ int main(int argc, char *argv[])
 
     auto mine_map = new cMap(map_border_coords, obstacles_list);
     mine_map->place_boosters(boosters_coords);
+    mine_map->try_wrap(init_location, vector<struct coords> ());
     if(verbose)
         mine_map->draw(init_location, vector<struct coords> (), init_location);
 
