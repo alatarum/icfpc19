@@ -148,7 +148,7 @@ public:
     cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>> obstacles_list);
     virtual ~cMap();
     void place_boosters(vector<struct coords> boosters_coords);
-    void draw(void);
+    void draw(struct coords worker, vector<struct coords> manips_rel, struct coords target);
     void try_wrap(struct coords worker, vector<struct coords> manips_rel);
     struct coords find_target(struct coords worker, int region_id);
     int estimate_route(struct coords worker, struct coords target, int region_id);

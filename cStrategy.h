@@ -9,7 +9,7 @@ class cStrategy
 public:
     cStrategy(cMap *mine_map, cWorker *worker);
     virtual ~cStrategy();
-    bool step();
+    bool step(bool verb);
 
 private:
     cMap *mine_map;

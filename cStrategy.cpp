@@ -15,7 +15,7 @@ cStrategy::~cStrategy()
     //dtor
 }
 
-bool cStrategy::step()
+bool cStrategy::step(bool verb)
 {
     struct coords cur_pos(worker->get_pos());
     if(cur_region == DRILL_ACTIVATED)
@@ -86,17 +86,19 @@ bool cStrategy::step()
         mine_map->update_edges_cost(region_size.y > region_size.x, worker->get_manip_rel_pos((directions_e)tmp_dir), cur_region);
         int cost = mine_map->estimate_route(cur_pos, cur_target, cur_region);
         auto angle = worker->get_rotation_angle((directions_e)tmp_dir);
+        int rotation_cost = 0;
         switch(angle)
         {
         case ALPHA_0: break;
         case ALPHA_90:
         case ALPHA_270:
-            cost += ROTATION_COST;
+            rotation_cost = ROTATION_COST;
             break;
         case ALPHA_180:
-            cost += ROTATION_COST*2;
+            rotation_cost = ROTATION_COST*2;
             break;
         }
+        cost += rotation_cost;
         if(((min_cost < 0) || (cost < min_cost)) && (cost >= 0))
         {
             min_cost = cost;
@@ -123,6 +125,9 @@ bool cStrategy::step()
 //3. wrap tiles
     mine_map->try_wrap(cur_pos, worker->get_manip_rel_pos());
 
+    if(verb)
+        mine_map->draw(cur_pos, worker->get_manip_rel_pos(manip_dir), cur_target);
+
 //4. move worker
     worker->do_rotate_manip(worker->get_rotation_angle(manip_dir));
 
@@ -148,12 +153,12 @@ bool cStrategy::step()
         return true;
     }
     worker->do_move(action);
+    cur_pos = worker->get_pos();
 //5. check for booster
-    boosters_e booster = mine_map->pick_booster(worker->get_pos());
+    boosters_e booster = mine_map->pick_booster(cur_pos);
     {
         if(booster != BOOST_NONE)
         {
-            coords tmp_pos = worker->get_pos();
             worker->take_booster(booster);
         }
     }

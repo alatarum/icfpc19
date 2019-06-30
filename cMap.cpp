@@ -245,7 +245,7 @@ void cMap::place_boosters(vector<struct coords> boosters_coords)
     }
 }
 
-void cMap::draw(void)
+void cMap::draw(struct coords worker, vector<struct coords> manips_rel, struct coords target)
 {
     struct map_tile cur_tile;
     cout << "      " << "   ";
@@ -263,6 +263,7 @@ void cMap::draw(void)
             {
                 struct map_tile &tile = tiles[x][y];
                 string symbol;
+                string color;
                 string pre  = (tile.wrapped)?"<":" ";
                 string post = (tile.wrapped)?">":" ";
 
@@ -271,20 +272,40 @@ void cMap::draw(void)
                 {
                     pre = std::to_string(region->get_id());
                 }
+
+                if(coords(x, y) == worker)
+                    color = "\033[32m";
+                else if(coords(x, y) == target)
+                    color = "\033[31m";
+                else
+                {
+                    for(struct coords manip: manips_rel)
+                    {
+                        if(worker + manip == coords(x, y))
+                        {
+                            auto reachable = test_wrappable(worker, manip, false);
+                            if((reachable == WRP_CAN_WRAP) || (reachable == WRP_WRAPPED))
+                            color = "\033[35m";
+                        }
+                    }
+                }
+
                 switch (tile.booster)
                 {
-                    case BOOST_NONE: symbol         = pre+"#"+post; break;
-                    case BOOST_EXT_MANIP: symbol    = pre+"B"+post; break;
-                    case BOOST_FAST_WHEELS: symbol  = pre+"F"+post; break;
-                    case BOOST_DRILL: symbol        = pre+"L"+post; break;
-                    case BOOST_X: symbol            = pre+"X"+post; break;
-                    case BOOST_RESET: symbol        = pre+"R"+post; break;
-                    case BOOST_CLONE: symbol        = pre+"C"+post; break;
+                    case BOOST_NONE: symbol         = color+pre+"#"+post; break;
+                    case BOOST_EXT_MANIP: symbol    = color+pre+"B"+post; break;
+                    case BOOST_FAST_WHEELS: symbol  = color+pre+"F"+post; break;
+                    case BOOST_DRILL: symbol        = color+pre+"L"+post; break;
+                    case BOOST_X: symbol            = color+pre+"X"+post; break;
+                    case BOOST_RESET: symbol        = color+pre+"R"+post; break;
+                    case BOOST_CLONE: symbol        = color+pre+"C"+post; break;
                 default:
                     cout << "Unknown tile type: " << tile.booster << endl;
                     exit(-1);
                 }
                 cout << symbol;
+                if(!color.empty())
+                    cout << "\033[0m";
             } else
                 cout << "   ";
         }
@@ -519,8 +540,12 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)
     {
-        sg = get_region(region_id)->get_subgraph();
-        cm = get_region(region_id)->get_graphcostmap();
+        auto region = get_region(region_id);
+        if(region->in_region(worker))
+        {
+            sg = region->get_subgraph();
+            cm = region->get_graphcostmap();
+        }
     } else if (region_id == DRILL_ACTIVATED) {
         sg = &fgraph;
         cm = &fcostMap;
@@ -581,12 +606,17 @@ struct coords cMap::find_target(struct coords worker, int region_id)
 
 int cMap::estimate_route(struct coords worker, struct coords target, int region_id)
 {
+bool verb = true;
     SubGraph<SmartGraph> *sg = &dgraph;
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)
     {
-        sg = get_region(region_id)->get_subgraph();
-        cm = get_region(region_id)->get_graphcostmap();
+        auto region = get_region(region_id);
+        if(region->in_region(worker) && region->in_region(target))
+        {
+            sg = region->get_subgraph();
+            cm = region->get_graphcostmap();
+        }
     } else if (region_id == DRILL_ACTIVATED) {
         sg = &fgraph;
         cm = &fcostMap;
@@ -621,8 +651,12 @@ directions_e cMap::get_direction(struct coords worker, struct coords target, int
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
     if(region_id >= 0)
     {
-        sg = get_region(region_id)->get_subgraph();
-        cm = get_region(region_id)->get_graphcostmap();
+        auto region = get_region(region_id);
+        if(region->in_region(worker) && region->in_region(target))
+        {
+            sg = region->get_subgraph();
+            cm = region->get_graphcostmap();
+        }
     } else if (region_id == DRILL_ACTIVATED) {
         sg = &fgraph;
         cm = &fcostMap;

@@ -228,12 +228,12 @@ int main(int argc, char *argv[])
     auto mine_map = new cMap(map_border_coords, obstacles_list);
     mine_map->place_boosters(boosters_coords);
     if(verbose)
-        mine_map->draw();
+        mine_map->draw(init_location, vector<struct coords> (), init_location);
 
     auto worker = new cWorker(init_location);
     auto strategy = new cStrategy(mine_map, worker);
     int steps = 0;
-    while(strategy->step())
+    while(strategy->step(verbose))
     {
         steps++;
 
@@ -245,7 +245,6 @@ int main(int argc, char *argv[])
         if(verbose)
         {
             cout << "step "  << steps<< endl;
-            mine_map->draw();
         }
     }
 
