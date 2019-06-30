@@ -165,6 +165,7 @@ public:
     bool is_accessible(coords target);
     bool drill_tile(struct coords target);
 
+    void set_draw_style(bool use_colors) {draw_use_colors = use_colors;}
 private:
     struct coords map_size;
     vector<vector<struct map_tile> > tiles;
@@ -186,6 +187,8 @@ private:
     wrappable_e test_wrappable(struct coords worker, struct coords manip_rel, bool wrap);
     bool create_edge(coords node, coords to);
     map_tile& tile(struct coords loc) {return tiles[loc.x][loc.y];}
+
+    bool draw_use_colors;
 };
 
 #endif // CMAP_H

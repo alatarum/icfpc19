@@ -138,7 +138,8 @@ int main(int argc, char *argv[])
     char *solution_file = NULL;
     modes_e mode = MODE_DEFAULT;
     int max_steps = 1000;
-    while ((opt = getopt(argc, argv, "hvi:o:n:p")) != -1)
+    bool use_colors = false;
+    while ((opt = getopt(argc, argv, "hvi:o:n:pc")) != -1)
     {
         switch (opt) {
         case 'i':
@@ -152,6 +153,9 @@ int main(int argc, char *argv[])
             break;
         case 'p':
             mode = MODE_PARSE_ONLY;
+            break;
+        case 'c':
+            use_colors = true;
             break;
         case 'v':
             verbose = 1;
@@ -228,6 +232,7 @@ int main(int argc, char *argv[])
     auto mine_map = new cMap(map_border_coords, obstacles_list);
     mine_map->place_boosters(boosters_coords);
     mine_map->try_wrap(init_location, vector<struct coords> ());
+    mine_map->set_draw_style(use_colors);
     if(verbose)
         mine_map->draw(init_location, vector<struct coords> (), init_location);
 

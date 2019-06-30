@@ -25,7 +25,8 @@ cMap::cMap(vector<struct coords> map_border_coords, vector<vector<struct coords>
     graph_filter_node(graph, false), graph_filter_edge(graph, true),
     dgraph(graph, graph_filter_node, graph_filter_edge), costMap(dgraph, 1),
     graph_full_node(graph, false), graph_full_edge(graph, true),
-    fgraph(graph, graph_full_node, graph_full_edge), fcostMap(fgraph, 1)
+    fgraph(graph, graph_full_node, graph_full_edge), fcostMap(fgraph, 1),
+    draw_use_colors(false)
 {
 //1. determine map size and extract vertical lines for borders
     vector<struct vertical_line> lines;
@@ -293,20 +294,20 @@ void cMap::draw(struct coords worker, vector<struct coords> manips_rel, struct c
 
                 switch (tile.booster)
                 {
-                    case BOOST_NONE: symbol         = color+pre+"#"+post; break;
-                    case BOOST_EXT_MANIP: symbol    = color+pre+"B"+post; break;
-                    case BOOST_FAST_WHEELS: symbol  = color+pre+"F"+post; break;
-                    case BOOST_DRILL: symbol        = color+pre+"L"+post; break;
-                    case BOOST_X: symbol            = color+pre+"X"+post; break;
-                    case BOOST_RESET: symbol        = color+pre+"R"+post; break;
-                    case BOOST_CLONE: symbol        = color+pre+"C"+post; break;
+                    case BOOST_NONE: symbol         = pre+"#"+post; break;
+                    case BOOST_EXT_MANIP: symbol    = pre+"B"+post; break;
+                    case BOOST_FAST_WHEELS: symbol  = pre+"F"+post; break;
+                    case BOOST_DRILL: symbol        = pre+"L"+post; break;
+                    case BOOST_X: symbol            = pre+"X"+post; break;
+                    case BOOST_RESET: symbol        = pre+"R"+post; break;
+                    case BOOST_CLONE: symbol        = pre+"C"+post; break;
                 default:
                     cout << "Unknown tile type: " << tile.booster << endl;
                     exit(-1);
                 }
+                if(draw_use_colors)
+                    symbol = color + symbol + "\033[0m";
                 cout << symbol;
-                if(!color.empty())
-                    cout << "\033[0m";
             } else
                 cout << "   ";
         }
@@ -586,7 +587,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         if(region_id != REGION_NOT_SELECTED)
         {
             struct coords tmp_sz(rect_t(worker, graph_tiles[n]->position).size());
-            if(max_dist < dist && dist < MAX_TARGET_DISTANCE && ((tmp_sz.x<3) || (tmp_sz.y<3)))
+            if(max_dist < dist && dist < MAX_TARGET_DISTANCE && ((tmp_sz.x < 3) || (tmp_sz.y < 3)))
             {
                 max_dist = dist;
                 max_target = graph_tiles[n]->position;
@@ -599,14 +600,14 @@ struct coords cMap::find_target(struct coords worker, int region_id)
         }
     }
     struct coords target((max_dist>0)?max_target:min_target);
-
     int tgt_dist = (max_dist>0)?max_dist:min_dist;
-    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
 
     if(min_dist_boost > 0 && min_dist_boost < 5)
     {
         target = min_booster;
+        tgt_dist = min_dist_boost;
     }
+    std::cout << "Path from " << worker.tostr()  << " to " << target.tostr() << " is: " << tgt_dist << std::endl;
     return target;
 }
 
