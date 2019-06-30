@@ -12,7 +12,7 @@ cWorker::cWorker(struct coords pos) :
     potential_manipulators.push_back(coords(0, 4));
     potential_manipulators.push_back(coords(0, -3));
     potential_manipulators.push_back(coords(0, 3));
-    potential_manipulators.push_back(coords(0, -3));
+    potential_manipulators.push_back(coords(0, -2));
     potential_manipulators.push_back(coords(0, -1));
     potential_manipulators.push_back(coords(0, 2));
     potential_manipulators.push_back(coords(0, 1));
