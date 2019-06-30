@@ -542,6 +542,7 @@ struct coords cMap::find_target(struct coords worker, int region_id)
     int min_dist = -1;
     struct coords min_booster(worker);
     int min_dist_boost = -1;
+    rect_t rect(coords(0,0), map_size);
 
     SubGraph<SmartGraph> *sg = &dgraph;
     SubGraph<SmartGraph>::ArcMap<int> *cm = &costMap;
@@ -553,9 +554,13 @@ struct coords cMap::find_target(struct coords worker, int region_id)
             sg = region->get_subgraph();
             cm = region->get_graphcostmap();
         }
+        rect = region->get_rect();
     } else if (region_id == DRILL_ACTIVATED) {
         sg = &fgraph;
         cm = &fcostMap;
+        auto region = in_region(worker);
+        if(region != nullptr)
+            rect = region->get_rect();
     }
     Dijkstra<SubGraph<SmartGraph>> dijkstra(*sg, *cm);
 
@@ -576,6 +581,8 @@ struct coords cMap::find_target(struct coords worker, int region_id)
                           (graph_tiles[n]->booster == BOOST_FAST_WHEELS) ||
                           (graph_tiles[n]->booster == BOOST_DRILL);
         if((graph_tiles[n]->wrapped == true) && (is_booster == false))
+            continue;
+        if(!rect.in_rect(graph_tiles[n]->position))
             continue;
         int dist = dijkstra.dist(n);
         if(min_dist < 0 || dist < min_dist)

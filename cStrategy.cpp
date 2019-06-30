@@ -64,15 +64,15 @@ bool cStrategy::step(bool verb)
         cur_target = mine_map->find_target(cur_pos, cur_region);
         if(cur_target == cur_pos)
         {
-            if(cur_region < 0)
+            if(cur_region != REGION_NOT_SELECTED)
             {
+                mine_map->delete_region(cur_region);
+                cur_region = REGION_NOT_SELECTED;
+                return true;
+            } else {
                 cout << "Done!" << endl;
                 return false;
             }
-            mine_map->delete_region(cur_region);
-            if(cur_region != DRILL_ACTIVATED)
-                cur_region = REGION_NOT_SELECTED;
-            return true;
         }
     }
 
