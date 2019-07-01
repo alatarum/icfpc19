@@ -8,8 +8,14 @@ cWorker::cWorker(struct coords pos) :
     manipulators.push_back(coords(1, -1));
     manipulators.push_back(coords(1, 0));
     manipulators.push_back(coords(1, 1));
+    potential_manipulators.push_back(coords(-1, -1));
+    potential_manipulators.push_back(coords(-1, 1));
+    potential_manipulators.push_back(coords(0, -5));
+    potential_manipulators.push_back(coords(0, 5));
     potential_manipulators.push_back(coords(0, -4));
     potential_manipulators.push_back(coords(0, 4));
+    potential_manipulators.push_back(coords(-2, 0));
+    potential_manipulators.push_back(coords(-1, 0));
     potential_manipulators.push_back(coords(0, -3));
     potential_manipulators.push_back(coords(0, 3));
     potential_manipulators.push_back(coords(0, -2));
@@ -201,6 +207,8 @@ void cWorker::do_rotate_manip(angle_e alpha)
 bool cWorker::do_activate_manip()
 {
     if(boost_manip <= 0)
+        return false;
+    if(potential_manipulators.size() == 0)
         return false;
     auto coords = potential_manipulators.back();
     potential_manipulators.pop_back();
